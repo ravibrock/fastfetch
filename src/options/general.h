@@ -2,7 +2,7 @@
 
 #include "util/FFstrbuf.h"
 
-typedef enum FFDsForceDrmType
+typedef enum __attribute__((__packed__)) FFDsForceDrmType
 {
     FF_DS_FORCE_DRM_TYPE_FALSE = 0,   // Disable
     FF_DS_FORCE_DRM_TYPE_TRUE = 1,    // Try `libdrm`, then `sysfs` if libdrm failed
@@ -13,9 +13,10 @@ typedef struct FFOptionsGeneral
 {
     bool multithreading;
     int32_t processingTimeout;
+    bool detectVersion;
 
     // Module options that cannot be put in module option structure
-    #if defined(__linux__) || defined(__FreeBSD__) || defined(__sun)
+    #if defined(__linux__) || defined(__FreeBSD__) || defined(__sun) || defined(__OpenBSD__) || defined(__NetBSD__)
     FFstrbuf playerName;
     bool escapeBedrock;
     FFDsForceDrmType dsForceDrm;

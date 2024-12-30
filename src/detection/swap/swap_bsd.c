@@ -6,7 +6,7 @@
 const char* ffDetectSwap(FFSwapResult* swap)
 {
     int mib[16];
-    size_t mibsize = sizeof(mib) / sizeof(*mib);
+    size_t mibsize = ARRAY_SIZE(mib);
     if (sysctlnametomib("vm.swap_info", mib, &mibsize) < 0)
         return "sysctlnametomib(\"vm.swap_info\") failed";
 
@@ -25,8 +25,8 @@ const char* ffDetectSwap(FFSwapResult* swap)
         swap->bytesTotal += (uint64_t) xsw.xsw_nblks;
     }
 
-    swap->bytesUsed *= instance.state.platform.pageSize;
-    swap->bytesTotal *= instance.state.platform.pageSize;
+    swap->bytesUsed *= instance.state.platform.sysinfo.pageSize;
+    swap->bytesTotal *= instance.state.platform.sysinfo.pageSize;
 
     return NULL;
 }

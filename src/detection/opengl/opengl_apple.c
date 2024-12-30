@@ -6,22 +6,20 @@
 #include <OpenGL/gl.h>
 #include <OpenGL/OpenGL.h> // This brings in CGL, not GL
 
-static const char* glHandleResult(FFOpenGLResult* result)
-{
-    ffStrbufAppendS(&result->version, (const char*) glGetString(GL_VERSION));
-    ffStrbufAppendS(&result->renderer, (const char*) glGetString(GL_RENDERER));
-    ffStrbufAppendS(&result->vendor, (const char*) glGetString(GL_VENDOR));
-    ffStrbufAppendS(&result->slv, (const char*) glGetString(GL_SHADING_LANGUAGE_VERSION));
-    result->library = "CGL";
-    return NULL;
-}
+void ffOpenGLHandleResult(FFOpenGLResult* result, __typeof__(&glGetString) ffglGetString);
 
 static const char* cglHandleContext(FFOpenGLResult* result, CGLContextObj context)
 {
     if(CGLSetCurrentContext(context) != kCGLNoError)
         return "CGLSetCurrentContext() failed";
 
-    return glHandleResult(result);
+    ffOpenGLHandleResult(result, &glGetString);
+
+    GLint major, minor;
+    CGLGetVersion(&major, &minor);
+    ffStrbufSetF(&result->library, "CGL %d.%d", major, minor);
+
+    return NULL;
 }
 
 static const char* cglHandlePixelFormat(FFOpenGLResult* result, CGLPixelFormatObj pixelFormat)
@@ -36,7 +34,7 @@ static const char* cglHandlePixelFormat(FFOpenGLResult* result, CGLPixelFormatOb
     return error;
 }
 
-const char* ffDetectOpenGL(FF_MAYBE_UNUSED FFOpenGLOptions* options, FFOpenGLResult* result)
+const char* cglDetectOpenGL(FFOpenGLResult* result)
 {
     CGLPixelFormatObj pixelFormat;
     CGLPixelFormatAttribute attrs[] = {
@@ -52,4 +50,21 @@ const char* ffDetectOpenGL(FF_MAYBE_UNUSED FFOpenGLOptions* options, FFOpenGLRes
     const char* error = cglHandlePixelFormat(result, pixelFormat);
     CGLDestroyPixelFormat(pixelFormat);
     return error;
+}
+
+const char* ffDetectOpenGL(FFOpenGLOptions* options, FFOpenGLResult* result)
+{
+    if (options->library == FF_OPENGL_LIBRARY_AUTO)
+        return cglDetectOpenGL(result);
+    else if (options->library == FF_OPENGL_LIBRARY_EGL)
+    {
+        #if __has_include(<EGL/egl.h>)
+        const char* ffOpenGLDetectByEGL(FFOpenGLResult* result);
+        return ffOpenGLDetectByEGL(result);
+        #else
+        return "fastfetch was compiled without egl support";
+        #endif
+    }
+    else
+        return "Unsupported OpenGL library";
 }

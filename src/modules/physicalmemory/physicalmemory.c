@@ -6,7 +6,6 @@
 #include "modules/physicalmemory/physicalmemory.h"
 #include "util/stringUtils.h"
 
-#define FF_PHYSICALMEMORY_NUM_FORMAT_ARGS 11
 #define FF_PHYSICALMEMORY_DISPLAY_NAME "Physical Memory"
 
 void ffPrintPhysicalMemory(FFPhysicalMemoryOptions* options)
@@ -17,6 +16,12 @@ void ffPrintPhysicalMemory(FFPhysicalMemoryOptions* options)
     if(error)
     {
         ffPrintError(FF_PHYSICALMEMORY_DISPLAY_NAME, 0, &options->moduleArgs, FF_PRINT_TYPE_DEFAULT, "%s", error);
+        return;
+    }
+
+    if (result.length == 0)
+    {
+        ffPrintError(FF_PHYSICALMEMORY_DISPLAY_NAME, 0, &options->moduleArgs, FF_PRINT_TYPE_DEFAULT, "No physical memory detected");
         return;
     }
 
@@ -48,18 +53,18 @@ void ffPrintPhysicalMemory(FFPhysicalMemoryOptions* options)
         }
         else
         {
-            FF_PRINT_FORMAT_CHECKED(FF_PHYSICALMEMORY_DISPLAY_NAME, (uint8_t) i, &options->moduleArgs, FF_PRINT_TYPE_DEFAULT, FF_PHYSICALMEMORY_NUM_FORMAT_ARGS, ((FFformatarg[]) {
-                {FF_FORMAT_ARG_TYPE_UINT64, &device->size, "bytes"},
-                {FF_FORMAT_ARG_TYPE_STRBUF, &prettySize, "size"},
-                {FF_FORMAT_ARG_TYPE_UINT, &device->maxSpeed, "max-speed"},
-                {FF_FORMAT_ARG_TYPE_UINT, &device->runningSpeed, "running-speed"},
-                {FF_FORMAT_ARG_TYPE_STRBUF, &device->type, "type"},
-                {FF_FORMAT_ARG_TYPE_STRBUF, &device->formFactor, "form-factor"},
-                {FF_FORMAT_ARG_TYPE_DOUBLE, &device->locator, "locator"},
-                {FF_FORMAT_ARG_TYPE_STRBUF, &device->vendor, "vendor"},
-                {FF_FORMAT_ARG_TYPE_STRBUF, &device->serial, "serial"},
-                {FF_FORMAT_ARG_TYPE_STRBUF, &device->partNumber, "part-number"},
-                {FF_FORMAT_ARG_TYPE_BOOL, &device->ecc, "is-ecc-enabled"},
+            FF_PRINT_FORMAT_CHECKED(FF_PHYSICALMEMORY_DISPLAY_NAME, (uint8_t) i, &options->moduleArgs, FF_PRINT_TYPE_DEFAULT, ((FFformatarg[]) {
+                FF_FORMAT_ARG(device->size, "bytes"),
+                FF_FORMAT_ARG(prettySize, "size"),
+                FF_FORMAT_ARG(device->maxSpeed, "max-speed"),
+                FF_FORMAT_ARG(device->runningSpeed, "running-speed"),
+                FF_FORMAT_ARG(device->type, "type"),
+                FF_FORMAT_ARG(device->formFactor, "form-factor"),
+                FF_FORMAT_ARG(device->locator, "locator"),
+                FF_FORMAT_ARG(device->vendor, "vendor"),
+                FF_FORMAT_ARG(device->serial, "serial"),
+                FF_FORMAT_ARG(device->partNumber, "part-number"),
+                FF_FORMAT_ARG(device->ecc, "is-ecc-enabled"),
             }));
         }
     }
@@ -148,37 +153,32 @@ void ffGeneratePhysicalMemoryJsonResult(FF_MAYBE_UNUSED FFPhysicalMemoryOptions*
     }
 }
 
-void ffPrintPhysicalMemoryHelpFormat(void)
-{
-    FF_PRINT_MODULE_FORMAT_HELP_CHECKED(FF_PHYSICALMEMORY_MODULE_NAME, "{7} {5}-{3}: {2}, running at {4} MT/s", FF_PHYSICALMEMORY_NUM_FORMAT_ARGS, ((const char* []) {
-        "Size (in bytes) - bytes",
-        "Size formatted - size",
-        "Max speed (in MT/s) - max-speed",
-        "Running speed (in MT/s) - running-speed",
-        "Type (DDR4, DDR5, etc.) - type",
-        "Form factor (SODIMM, DIMM, etc.) - form-factor",
-        "Bank/Device Locator (BANK0/SIMM0, BANK0/SIMM1, etc.) - locator",
-        "Vendor - vendor",
-        "Serial number - serial",
-        "Part number - part-number",
-        "True if ECC enabled - is-ecc-enabled",
-    }));
-}
+static FFModuleBaseInfo ffModuleInfo = {
+    .name = FF_PHYSICALMEMORY_MODULE_NAME,
+    .description = "Print system physical memory devices",
+    .parseCommandOptions = (void*) ffParsePhysicalMemoryCommandOptions,
+    .parseJsonObject = (void*) ffParsePhysicalMemoryJsonObject,
+    .printModule = (void*) ffPrintPhysicalMemory,
+    .generateJsonConfig = (void*) ffGeneratePhysicalMemoryJsonConfig,
+    .formatArgs = FF_FORMAT_ARG_LIST(((FFModuleFormatArg[]) {
+        {"Size (in bytes)", "bytes"},
+        {"Size formatted", "size"},
+        {"Max speed (in MT/s)", "max-speed"},
+        {"Running speed (in MT/s)", "running-speed"},
+        {"Type (DDR4, DDR5, etc.)", "type"},
+        {"Form factor (SODIMM, DIMM, etc.)", "form-factor"},
+        {"Bank/Device Locator (BANK0/SIMM0, BANK0/SIMM1, etc.)", "locator"},
+        {"Vendor", "vendor"},
+        {"Serial number", "serial"},
+        {"Part number", "part-number"},
+        {"True if ECC enabled", "is-ecc-enabled"},
+    }))
+};
 
 void ffInitPhysicalMemoryOptions(FFPhysicalMemoryOptions* options)
 {
-    ffOptionInitModuleBaseInfo(
-        &options->moduleInfo,
-        FF_PHYSICALMEMORY_MODULE_NAME,
-        "Print system physical memory devices",
-        ffParsePhysicalMemoryCommandOptions,
-        ffParsePhysicalMemoryJsonObject,
-        ffPrintPhysicalMemory,
-        ffGeneratePhysicalMemoryJsonResult,
-        ffPrintPhysicalMemoryHelpFormat,
-        ffGeneratePhysicalMemoryJsonConfig
-    );
-    ffOptionInitModuleArg(&options->moduleArgs);
+    options->moduleInfo = ffModuleInfo;
+    ffOptionInitModuleArg(&options->moduleArgs, "󰑭");
 }
 
 void ffDestroyPhysicalMemoryOptions(FFPhysicalMemoryOptions* options)

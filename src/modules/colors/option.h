@@ -4,9 +4,10 @@
 
 #include "common/option.h"
 
-typedef enum FFColorsSymbol
+typedef enum __attribute__((__packed__)) FFColorsSymbol
 {
     FF_COLORS_SYMBOL_BLOCK,
+    FF_COLORS_SYMBOL_BACKGROUND,
     FF_COLORS_SYMBOL_CIRCLE,
     FF_COLORS_SYMBOL_DIAMOND,
     FF_COLORS_SYMBOL_SQUARE,

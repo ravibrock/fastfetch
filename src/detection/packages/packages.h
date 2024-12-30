@@ -17,17 +17,21 @@ typedef struct FFPackagesResult
     uint32_t guixHome;
     uint32_t guixSystem;
     uint32_t guixUser;
+    uint32_t linglong;
     uint32_t lpkg;
     uint32_t lpkgbuild;
+    uint32_t macports;
+    uint32_t mport;
     uint32_t nixDefault;
     uint32_t nixSystem;
     uint32_t nixUser;
     uint32_t opkg;
     uint32_t pacman;
+    uint32_t pacstall;
     uint32_t paludis;
     uint32_t pkg;
     uint32_t pkgtool;
-    uint32_t macports;
+    uint32_t qi;
     uint32_t rpm;
     uint32_t scoop;
     uint32_t snap;
@@ -41,3 +45,5 @@ typedef struct FFPackagesResult
 } FFPackagesResult;
 
 const char* ffDetectPackages(FFPackagesResult* result, FFPackagesOptions* options);
+bool ffPackagesReadCache(FFstrbuf* cacheDir, FFstrbuf* cacheContent, const char* filePath, const char* packageId, uint32_t* result);
+bool ffPackagesWriteCache(FFstrbuf* cacheDir, FFstrbuf* cacheContent, uint32_t num_elements);

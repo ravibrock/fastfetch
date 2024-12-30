@@ -34,7 +34,7 @@ const char* ffDetectIntelGpuInfo(const FFGpuDriverCondition* cond, FFGpuDriverRe
     if (!igclData.inited)
     {
         igclData.inited = true;
-        FF_LIBRARY_LOAD(libigcl, NULL, "dlopen igcl (ControlLib) failed", soName , 1);
+        FF_LIBRARY_LOAD(libigcl, "dlopen igcl (ControlLib) failed", soName , 1);
         FF_LIBRARY_LOAD_SYMBOL_MESSAGE(libigcl, ctlInit)
         FF_LIBRARY_LOAD_SYMBOL_VAR_MESSAGE(libigcl, igclData, ctlClose)
         FF_LIBRARY_LOAD_SYMBOL_VAR_MESSAGE(libigcl, igclData, ctlEnumerateDevices)
@@ -128,7 +128,7 @@ const char* ffDetectIntelGpuInfo(const FFGpuDriverCondition* cond, FFGpuDriverRe
     if (result.memory)
     {
         ctl_mem_handle_t memoryModules[16];
-        uint32_t memoryCount = sizeof(memoryModules) / sizeof(memoryModules[0]);
+        uint32_t memoryCount = ARRAY_SIZE(memoryModules);
         if (igclData.ffctlEnumMemoryModules(device, &memoryCount, memoryModules) == CTL_RESULT_SUCCESS && memoryCount > 0)
         {
             result.memory->used = 0;
@@ -157,7 +157,7 @@ const char* ffDetectIntelGpuInfo(const FFGpuDriverCondition* cond, FFGpuDriverRe
     if (result.temp)
     {
         ctl_temp_handle_t sensors[16];
-        uint32_t sensorCount = sizeof(sensors) / sizeof(sensors[0]);
+        uint32_t sensorCount = ARRAY_SIZE(sensors);
         if (igclData.ffctlEnumTemperatureSensors(device, &sensorCount, sensors) == CTL_RESULT_SUCCESS && sensorCount > 0)
         {
             double sumValue = 0;
@@ -178,7 +178,7 @@ const char* ffDetectIntelGpuInfo(const FFGpuDriverCondition* cond, FFGpuDriverRe
     if (result.frequency)
     {
         ctl_freq_handle_t domains[16];
-        uint32_t domainCount = sizeof(domains) / sizeof(domains[0]);
+        uint32_t domainCount = ARRAY_SIZE(domains);
         if (igclData.ffctlEnumFrequencyDomains(device, &domainCount, domains) == CTL_RESULT_SUCCESS && domainCount > 0)
         {
             double maxValue = 0;
@@ -191,9 +191,12 @@ const char* ffDetectIntelGpuInfo(const FFGpuDriverCondition* cond, FFGpuDriverRe
                         maxValue = props.max;
                 }
             }
-            *result.frequency = maxValue / 1000;
+            *result.frequency = (uint32_t) (maxValue + 0.5);
         }
     }
+
+    if (result.name)
+        ffStrbufSetS(result.name, properties.name);
 
     return NULL;
 }

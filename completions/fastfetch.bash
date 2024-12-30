@@ -83,12 +83,12 @@ __fastfetch_complete_logo_type()
 
 __fastfetch_complete_binary_prefix()
 {
-    local __ff_binary_prefixes=(
+    local __ff_size_binary_prefixes=(
         "iec"
         "si"
         "jedec"
     )
-    COMPREPLY=($(compgen -W "${__ff_binary_prefixes[*]}" -- "$CURRENT_WORD"))
+    COMPREPLY=($(compgen -W "${__ff_size_binary_prefixes[*]}" -- "$CURRENT_WORD"))
 }
 
 __fastfetch_complete_gl()
@@ -183,7 +183,10 @@ __fastfetch_completion()
         "--display-precise-refresh-rate"
         "--localip-show-ipv4"
         "--localip-show-ipv6"
+        "--localip-show-flags"
         "--localip-show-loop"
+        "--localip-show-mtu"
+        "--localip-show-speed"
         "--localip-name-prefix"
         "--localip-compact-type"
         "--escape-bedrock"
@@ -356,7 +359,6 @@ __fastfetch_completion()
     local FF_OPTIONS_PATH=(
         "-c"
         "--config"
-        "--lib-pci"
         "--lib-vulkan"
         "--lib-wayland"
         "--lib-xcb-randr"

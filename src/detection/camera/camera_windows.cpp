@@ -21,9 +21,9 @@ private:
 extern "C"
 const char* ffDetectCamera(FF_MAYBE_UNUSED FFlist* result)
 {
-    FF_LIBRARY_LOAD(mfplat, NULL, "dlopen mfplat" FF_LIBRARY_EXTENSION " failed", "mfplat" FF_LIBRARY_EXTENSION, 1)
+    FF_LIBRARY_LOAD(mfplat, "dlopen mfplat" FF_LIBRARY_EXTENSION " failed", "mfplat" FF_LIBRARY_EXTENSION, 1)
     FF_LIBRARY_LOAD_SYMBOL_MESSAGE(mfplat, MFCreateAttributes)
-    FF_LIBRARY_LOAD(mf, NULL, "dlopen mf" FF_LIBRARY_EXTENSION " failed", "mf" FF_LIBRARY_EXTENSION, 1)
+    FF_LIBRARY_LOAD(mf, "dlopen mf" FF_LIBRARY_EXTENSION " failed", "mf" FF_LIBRARY_EXTENSION, 1)
     FF_LIBRARY_LOAD_SYMBOL_MESSAGE(mf, MFEnumDeviceSources)
 
     const char* error = ffInitCom();
@@ -52,7 +52,7 @@ const char* ffDetectCamera(FF_MAYBE_UNUSED FFlist* result)
 
         wchar_t buffer[256];
         uint32_t length = 0;
-        if (FAILED(device->GetString(MF_DEVSOURCE_ATTRIBUTE_FRIENDLY_NAME, buffer, sizeof(buffer), &length)) || length == 0)
+        if (FAILED(device->GetString(MF_DEVSOURCE_ATTRIBUTE_FRIENDLY_NAME, buffer, ARRAY_SIZE(buffer), &length)) || length == 0)
             continue;
 
         FFCameraResult* camera = (FFCameraResult*) ffListAdd(result);
@@ -63,7 +63,7 @@ const char* ffDetectCamera(FF_MAYBE_UNUSED FFlist* result)
         camera->width = 0;
         camera->height = 0;
 
-        if (SUCCEEDED(device->GetString(MF_DEVSOURCE_ATTRIBUTE_SOURCE_TYPE_VIDCAP_SYMBOLIC_LINK, buffer, sizeof(buffer), &length)) && length > 0)
+        if (SUCCEEDED(device->GetString(MF_DEVSOURCE_ATTRIBUTE_SOURCE_TYPE_VIDCAP_SYMBOLIC_LINK, buffer, ARRAY_SIZE(buffer), &length)) && length > 0)
             ffStrbufSetNWS(&camera->id, length, buffer);
 
         IMFMediaSource* FF_AUTO_RELEASE_COM_OBJECT source = nullptr;

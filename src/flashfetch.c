@@ -37,7 +37,7 @@ int main(void)
         &options->dateTime,
     };
 
-    for (size_t i = 0; i < sizeof(modules) / sizeof(modules[0]); i++)
+    for (size_t i = 0; i < ARRAY_SIZE(modules); i++)
         ((const FFModuleBaseInfo*) modules[i])->printModule(modules[i]);
 
     ffFinish();

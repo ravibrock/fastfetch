@@ -8,4 +8,6 @@ typedef struct FFWifiOptions
 {
     FFModuleBaseInfo moduleInfo;
     FFModuleArgs moduleArgs;
+
+    FFPercentageModuleConfig percent;
 } FFWifiOptions;

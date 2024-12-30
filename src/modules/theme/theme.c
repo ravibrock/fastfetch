@@ -4,8 +4,6 @@
 #include "modules/theme/theme.h"
 #include "util/stringUtils.h"
 
-#define FF_THEME_NUM_FORMAT_ARGS 2
-
 void ffPrintTheme(FFThemeOptions* options)
 {
     FFThemeResult result = {
@@ -35,11 +33,14 @@ void ffPrintTheme(FFThemeOptions* options)
     }
     else
     {
-        FF_PRINT_FORMAT_CHECKED(FF_THEME_MODULE_NAME, 0, &options->moduleArgs, FF_PRINT_TYPE_DEFAULT, FF_THEME_NUM_FORMAT_ARGS, ((FFformatarg[]){
-            {FF_FORMAT_ARG_TYPE_STRBUF, &result.theme1, "theme1"},
-            {FF_FORMAT_ARG_TYPE_STRBUF, &result.theme2, "theme2"},
+        FF_PRINT_FORMAT_CHECKED(FF_THEME_MODULE_NAME, 0, &options->moduleArgs, FF_PRINT_TYPE_DEFAULT, ((FFformatarg[]){
+            FF_FORMAT_ARG(result.theme1, "theme1"),
+            FF_FORMAT_ARG(result.theme2, "theme2"),
         }));
     }
+
+    ffStrbufDestroy(&result.theme1);
+    ffStrbufDestroy(&result.theme2);
 }
 
 bool ffParseThemeCommandOptions(FFThemeOptions* options, const char* key, const char* value)
@@ -94,30 +95,29 @@ void ffGenerateThemeJsonResult(FF_MAYBE_UNUSED FFThemeOptions* options, yyjson_m
     yyjson_mut_val* theme = yyjson_mut_obj_add_obj(doc, module, "result");
     yyjson_mut_obj_add_strbuf(doc, theme, "theme1", &result.theme1);
     yyjson_mut_obj_add_strbuf(doc, theme, "theme2", &result.theme2);
+
+    ffStrbufDestroy(&result.theme1);
+    ffStrbufDestroy(&result.theme2);
 }
 
-void ffPrintThemeHelpFormat(void)
-{
-    FF_PRINT_MODULE_FORMAT_HELP_CHECKED(FF_THEME_MODULE_NAME, "{1}, {2}", FF_THEME_NUM_FORMAT_ARGS, ((const char* []) {
-        "Theme part 1 - theme1",
-        "Theme part 2 - theme2",
-    }));
-}
+static FFModuleBaseInfo ffModuleInfo = {
+    .name = FF_THEME_MODULE_NAME,
+    .description = "Print current theme of desktop environment",
+    .parseCommandOptions = (void*) ffParseThemeCommandOptions,
+    .parseJsonObject = (void*) ffParseThemeJsonObject,
+    .printModule = (void*) ffPrintTheme,
+    .generateJsonResult = (void*) ffGenerateThemeJsonResult,
+    .generateJsonConfig = (void*) ffGenerateThemeJsonConfig,
+    .formatArgs = FF_FORMAT_ARG_LIST(((FFModuleFormatArg[]) {
+        {"Theme part 1", "theme1"},
+        {"Theme part 2", "theme2"},
+    }))
+};
 
 void ffInitThemeOptions(FFThemeOptions* options)
 {
-    ffOptionInitModuleBaseInfo(
-        &options->moduleInfo,
-        FF_THEME_MODULE_NAME,
-        "Print current theme of desktop environment",
-        ffParseThemeCommandOptions,
-        ffParseThemeJsonObject,
-        ffPrintTheme,
-        ffGenerateThemeJsonResult,
-        ffPrintThemeHelpFormat,
-        ffGenerateThemeJsonConfig
-    );
-    ffOptionInitModuleArg(&options->moduleArgs);
+    options->moduleInfo = ffModuleInfo;
+    ffOptionInitModuleArg(&options->moduleArgs, "󰉼");
 }
 
 void ffDestroyThemeOptions(FFThemeOptions* options)

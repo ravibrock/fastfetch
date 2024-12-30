@@ -93,11 +93,25 @@ int main(void)
 
     //substr
 
-    ffStrbufSubstrBefore(&strbuf, 9);
+    VERIFY(ffStrbufSubstrBefore(&strbuf, 9));
     VERIFY(strbuf.length == 9);
     VERIFY(strbuf.allocated >= 110);
     VERIFY(strbuf.chars[strbuf.length] == 0);
     VERIFY(ffStrbufEqualS(&strbuf, "123456789"));
+
+    VERIFY(!ffStrbufSubstrBeforeFirstC(&strbuf, '0'));
+    VERIFY(!ffStrbufSubstrBeforeLastC(&strbuf, '0'));
+    VERIFY(!ffStrbufSubstrAfterFirstC(&strbuf, '0'));
+    VERIFY(!ffStrbufSubstrAfterLastC(&strbuf, '0'));
+    VERIFY(ffStrbufEqualS(&strbuf, "123456789"));
+
+    VERIFY(ffStrbufSubstrBeforeFirstC(&strbuf, '9'));
+    VERIFY(ffStrbufSubstrBeforeLastC(&strbuf, '8'));
+    VERIFY(ffStrbufSubstrAfterFirstC(&strbuf, '1'));
+    VERIFY(ffStrbufSubstrAfterLastC(&strbuf, '2'));
+    VERIFY(ffStrbufEqualS(&strbuf, "34567"));
+
+    ffStrbufSetS(&strbuf, "123456789");
 
     //startsWithC
 
@@ -265,6 +279,20 @@ int main(void)
     VERIFY(ffStrbufEqualS(&strbuf, "TEST_TEST"));
     VERIFY(strbuf.length == 9);
     VERIFY(strbuf.allocated >= 10);
+    ffStrbufAppendC(&strbuf, '_');
+    VERIFY(ffStrbufEqualS(&strbuf, "TEST_TEST_"));
+    ffStrbufDestroy(&strbuf);
+    VERIFY(strbuf.length == 0);
+    VERIFY(strbuf.allocated == 0);
+
+    //ffStrbufCreateStatic / Prepend
+    ffStrbufInitStatic(&strbuf, "TEST");
+    ffStrbufPrependS(&strbuf, "TEST_");
+    VERIFY(ffStrbufEqualS(&strbuf, "TEST_TEST"));
+    VERIFY(strbuf.length == 9);
+    VERIFY(strbuf.allocated >= 10);
+    ffStrbufPrependC(&strbuf, '_');
+    VERIFY(ffStrbufEqualS(&strbuf, "_TEST_TEST"));
     ffStrbufDestroy(&strbuf);
     VERIFY(strbuf.length == 0);
     VERIFY(strbuf.allocated == 0);
@@ -313,7 +341,7 @@ int main(void)
 
     //ffStrbufCreateStatic / Substr
     ffStrbufInitStatic(&strbuf, "__TEST__");
-    ffStrbufRemoveSubstr(&strbuf, 0, 6);
+    VERIFY(ffStrbufRemoveSubstr(&strbuf, 0, 6));
     VERIFY(ffStrbufEqualS(&strbuf, "__"));
     VERIFY(strbuf.length == 2);
     VERIFY(strbuf.allocated > 0);
@@ -321,7 +349,7 @@ int main(void)
 
     //ffStrbufCreateStatic / Substr
     ffStrbufInitStatic(&strbuf, "__TEST__");
-    ffStrbufRemoveSubstr(&strbuf, 2, 8);
+    VERIFY(ffStrbufRemoveSubstr(&strbuf, 2, 8));
     VERIFY(ffStrbufEqualS(&strbuf, "__"));
     VERIFY(strbuf.length == 2);
     VERIFY(strbuf.allocated > 0);
@@ -329,13 +357,13 @@ int main(void)
 
     //ffStrbufCreateStatic / Substr
     ffStrbufInitStatic(&strbuf, "__TEST__");
-    ffStrbufRemoveSubstr(&strbuf, 2, 6);
+    VERIFY(ffStrbufRemoveSubstr(&strbuf, 2, 6));
     VERIFY(ffStrbufEqualS(&strbuf, "____"));
     VERIFY(strbuf.length == 4);
     VERIFY(strbuf.allocated > 0);
     ffStrbufDestroy(&strbuf);
 
-    //ffStrbufCreateStatic / Substr
+    //ffStrbufCreateStatic / ReplaceAllC
     ffStrbufInitStatic(&strbuf, "__TEST__");
     ffStrbufReplaceAllC(&strbuf, '_', '-');
     VERIFY(ffStrbufEqualS(&strbuf, "--TEST--"));
@@ -353,6 +381,9 @@ int main(void)
     ffStrbufEnsureFixedLengthFree(&strbuf, 10);
     VERIFY(strbuf.length == 0);
     VERIFY(strbuf.allocated == 11);
+    ffStrbufEnsureFixedLengthFree(&strbuf, 12);
+    VERIFY(strbuf.length == 0);
+    VERIFY(strbuf.allocated == 13);
     ffStrbufDestroy(&strbuf);
 
     //ffStrbufEnsureFixedLengthFree / empty buffer with zero free length
@@ -402,6 +433,166 @@ int main(void)
     VERIFY(ffStrbufEqualS(&strbuf, "__TEST__"));
     ffStrbufDestroy(&strbuf);
 
+    //ffStrbufInsertNC
+    ffStrbufInitStatic(&strbuf, "123456");
+    ffStrbufInsertNC(&strbuf, 0, 2, 'A');
+    VERIFY(ffStrbufEqualS(&strbuf, "AA123456"));
+    ffStrbufInsertNC(&strbuf, 4, 2, 'B');
+    VERIFY(ffStrbufEqualS(&strbuf, "AA12BB3456"));
+    ffStrbufInsertNC(&strbuf, strbuf.length, 2, 'C');
+    VERIFY(ffStrbufEqualS(&strbuf, "AA12BB3456CC"));
+    ffStrbufInsertNC(&strbuf, 999, 2, 'D');
+    VERIFY(ffStrbufEqualS(&strbuf, "AA12BB3456CCDD"));
+    ffStrbufDestroy(&strbuf);
+
+    // smallest allocation test
+    {
+        FF_STRBUF_AUTO_DESTROY strbuf1 = ffStrbufCreateA(10);
+        VERIFY(strbuf1.allocated == 10);
+        ffStrbufEnsureFree(&strbuf1, 16);
+        VERIFY(strbuf1.allocated == 32);
+
+        FF_STRBUF_AUTO_DESTROY strbuf2 = ffStrbufCreate();
+        VERIFY(strbuf2.allocated == 0);
+        ffStrbufEnsureFree(&strbuf2, 16);
+        VERIFY(strbuf2.allocated == 32);
+    }
+
+    {
+        int i = 0;
+        char* lineptr = NULL;
+        size_t n = 0;
+        const char* text = "Processor\t: ARMv7\nprocessor\t: 0\nBogoMIPS\t: 38.00\n\nprocessor\t: 1\nBogoMIPS\t: 38.00";
+        ffStrbufSetS(&strbuf, text);
+
+        while (ffStrbufGetline(&lineptr, &n, &strbuf))
+        {
+            ++i;
+            switch (i)
+            {
+                case 1:
+                    VERIFY(strcmp(lineptr, "Processor\t: ARMv7") == 0);
+                    VERIFY(n == strlen("Processor\t: ARMv7"));
+                    break;
+                case 2:
+                    VERIFY(strcmp(lineptr, "processor\t: 0") == 0);
+                    VERIFY(n == strlen("processor\t: 0"));
+                    break;
+                case 3:
+                    VERIFY(strcmp(lineptr, "BogoMIPS\t: 38.00") == 0);
+                    VERIFY(n == strlen("BogoMIPS\t: 38.00"));
+                    break;
+                case 4:
+                    VERIFY(strcmp(lineptr, "") == 0);
+                    VERIFY(n == 0);
+                    break;
+                case 5:
+                    VERIFY(strcmp(lineptr, "processor\t: 1") == 0);
+                    VERIFY(n == strlen("processor\t: 1"));
+                    break;
+                case 6:
+                    VERIFY(strcmp(lineptr, "BogoMIPS\t: 38.00") == 0);
+                    VERIFY(n == strlen("BogoMIPS\t: 38.00"));
+                    break;
+                default:
+                    VERIFY(false);
+                    break;
+            }
+        }
+        VERIFY(ffStrbufEqualS(&strbuf, text));
+        VERIFY(*lineptr == '\0');
+        VERIFY(i == 6);
+
+        lineptr = NULL;
+        n = 0;
+        i = 0;
+        text = "\n";
+        ffStrbufSetS(&strbuf, text);
+        while (ffStrbufGetline(&lineptr, &n, &strbuf))
+        {
+            ++i;
+            switch (i)
+            {
+                case 1:
+                    VERIFY(strcmp(lineptr, "") == 0);
+                    VERIFY(n == 0);
+                    break;
+                default:
+                    VERIFY(false);
+                    break;
+            }
+        }
+        VERIFY(ffStrbufEqualS(&strbuf, text));
+        VERIFY(*lineptr == '\0');
+        VERIFY(i == 1);
+
+        lineptr = NULL;
+        n = 0;
+        i = 0;
+        text = "abcd";
+        ffStrbufSetS(&strbuf, text);
+        while (ffStrbufGetline(&lineptr, &n, &strbuf))
+        {
+            ++i;
+            switch (i)
+            {
+                case 1:
+                    VERIFY(strcmp(lineptr, "abcd") == 0);
+                    VERIFY(n == strlen("abcd"));
+                    break;
+                default:
+                    VERIFY(false);
+                    break;
+            }
+        }
+        VERIFY(ffStrbufEqualS(&strbuf, text));
+        VERIFY(*lineptr == '\0');
+        VERIFY(i == 1);
+
+        lineptr = NULL;
+        n = 0;
+        i = 0;
+        text = "";
+        ffStrbufSetS(&strbuf, text);
+        while (ffStrbufGetline(&lineptr, &n, &strbuf))
+        {
+            ++i;
+            VERIFY(false);
+        }
+
+        VERIFY(ffStrbufEqualS(&strbuf, text));
+        VERIFY(*lineptr == '\0');
+        VERIFY(i == 0);
+    }
+
+    ffStrbufSetS(&strbuf, "Hello World");
+    VERIFY(ffStrbufRemoveDupWhitespaces(&strbuf) == false);
+    VERIFY(strcmp(strbuf.chars, "Hello World") == 0);
+
+    ffStrbufSetS(&strbuf, "Hello   World");
+    VERIFY(ffStrbufRemoveDupWhitespaces(&strbuf) == true);
+    VERIFY(strcmp(strbuf.chars, "Hello World") == 0);
+
+    ffStrbufSetS(&strbuf, "   Hello World   ");
+    VERIFY(ffStrbufRemoveDupWhitespaces(&strbuf) == true);
+    VERIFY(strcmp(strbuf.chars, " Hello World ") == 0);
+
+    ffStrbufSetS(&strbuf, "   Hello   World   ");
+    VERIFY(ffStrbufRemoveDupWhitespaces(&strbuf) == true);
+    VERIFY(strcmp(strbuf.chars, " Hello World ") == 0);
+
+    ffStrbufSetS(&strbuf, "   ");
+    VERIFY(ffStrbufRemoveDupWhitespaces(&strbuf) == true);
+    VERIFY(strcmp(strbuf.chars, " ") == 0);
+
+    ffStrbufClear(&strbuf);
+    VERIFY(ffStrbufRemoveDupWhitespaces(&strbuf) == false);
+    VERIFY(strcmp(strbuf.chars, "") == 0);
+
+    ffStrbufSetStatic(&strbuf, "   ");
+    VERIFY(ffStrbufRemoveDupWhitespaces(&strbuf) == false);
+    VERIFY(strcmp(strbuf.chars, "   ") == 0);
+
     //Success
-    puts("\033[32mAll tests passed!" FASTFETCH_TEXT_MODIFIER_RESET);
+    puts("\e[32mAll tests passed!" FASTFETCH_TEXT_MODIFIER_RESET);
 }

@@ -1,5 +1,6 @@
 #include "FFPlatform_private.h"
 #include "common/io/io.h"
+#include "common/library.h"
 #include "util/stringUtils.h"
 #include "util/windows/unicode.h"
 #include "util/windows/registry.h"
@@ -138,7 +139,7 @@ static void getUserName(FFPlatform* platform)
     else
     {
         wchar_t buffer[128];
-        DWORD len = sizeof(buffer) / sizeof(*buffer);
+        DWORD len = ARRAY_SIZE(buffer);
         if(GetUserNameW(buffer, &len))
             ffStrbufSetWS(&platform->userName, buffer);
     }
@@ -147,7 +148,7 @@ static void getUserName(FFPlatform* platform)
 static void getHostName(FFPlatform* platform)
 {
     wchar_t buffer[128];
-    DWORD len = sizeof(buffer) / sizeof(*buffer);
+    DWORD len = ARRAY_SIZE(buffer);
     if(GetComputerNameExW(ComputerNameDnsHostname, buffer, &len))
         ffStrbufSetWS(&platform->hostName, buffer);
 }
@@ -159,7 +160,18 @@ static void getUserShell(FFPlatform* platform)
     ffStrbufReplaceAllC(&platform->userShell, '\\', '/');
 }
 
-static void getSystemReleaseAndVersion(FFPlatform* platform)
+static void detectWine(FFstrbuf* buf)
+{
+    static const char *(__cdecl *pwine_get_version)(void);
+    HMODULE hntdll = GetModuleHandleW(L"ntdll.dll");
+    if (!hntdll) return;
+    pwine_get_version = (void *)GetProcAddress(hntdll, "wine_get_version");
+    if (!pwine_get_version) return;
+    ffStrbufAppendS(buf, buf->length ? " - wine " : "wine ");
+    ffStrbufAppendS(buf, pwine_get_version());
+}
+
+static void getSystemReleaseAndVersion(FFPlatformSysinfo* info)
 {
     RTL_OSVERSIONINFOW osVersion = { .dwOSVersionInfoSize = sizeof(osVersion) };
     if (!NT_SUCCESS(RtlGetVersion(&osVersion)))
@@ -172,39 +184,40 @@ static void getSystemReleaseAndVersion(FFPlatform* platform)
     uint32_t ubr = 0;
     ffRegReadUint(hKey, L"UBR", &ubr, NULL);
 
-    ffStrbufAppendF(&platform->systemRelease,
+    ffStrbufAppendF(&info->release,
         "%u.%u.%u.%u",
         (unsigned) osVersion.dwMajorVersion,
         (unsigned) osVersion.dwMinorVersion,
         (unsigned) osVersion.dwBuildNumber,
         (unsigned) ubr);
 
-    ffStrbufInit(&platform->systemDisplayVersion);
-    if(!ffRegReadStrbuf(hKey, L"DisplayVersion", &platform->systemDisplayVersion, NULL))
+    ffStrbufInit(&info->displayVersion);
+    if(!ffRegReadStrbuf(hKey, L"DisplayVersion", &info->displayVersion, NULL))
     {
         if (osVersion.szCSDVersion[0])
-            ffStrbufSetWS(&platform->systemDisplayVersion, osVersion.szCSDVersion);
+            ffStrbufSetWS(&info->displayVersion, osVersion.szCSDVersion);
         else
-            ffRegReadStrbuf(hKey, L"ReleaseId", &platform->systemDisplayVersion, NULL); // For old Windows 10
+            ffRegReadStrbuf(hKey, L"ReleaseId", &info->displayVersion, NULL); // For old Windows 10
     }
+    detectWine(&info->displayVersion);
 
-    ffRegReadStrbuf(hKey, L"BuildLabEx", &platform->systemVersion, NULL);
+    ffRegReadStrbuf(hKey, L"BuildLabEx", &info->version, NULL);
 
     switch (osVersion.dwPlatformId)
     {
     case VER_PLATFORM_WIN32s:
-        ffStrbufSetStatic(&platform->systemName, "WIN32s");
+        ffStrbufSetStatic(&info->name, "WIN32s");
         break;
     case VER_PLATFORM_WIN32_WINDOWS:
-        ffStrbufSetStatic(&platform->systemName, "WIN32_WINDOWS");
+        ffStrbufSetStatic(&info->name, "WIN32_WINDOWS");
         break;
     case VER_PLATFORM_WIN32_NT:
-        ffStrbufSetStatic(&platform->systemName, "WIN32_NT");
+        ffStrbufSetStatic(&info->name, "WIN32_NT");
         break;
     }
 }
 
-static void getSystemArchitectureAndPageSize(FFPlatform* platform)
+static void getSystemArchitectureAndPageSize(FFPlatformSysinfo* info)
 {
     SYSTEM_INFO sysInfo;
     GetNativeSystemInfo(&sysInfo);
@@ -212,52 +225,53 @@ static void getSystemArchitectureAndPageSize(FFPlatform* platform)
     switch(sysInfo.wProcessorArchitecture)
     {
         case PROCESSOR_ARCHITECTURE_AMD64:
-            ffStrbufSetStatic(&platform->systemArchitecture, "x86_64");
+            ffStrbufSetStatic(&info->architecture, "x86_64");
             break;
         case PROCESSOR_ARCHITECTURE_IA64:
-            ffStrbufSetStatic(&platform->systemArchitecture, "ia64");
+            ffStrbufSetStatic(&info->architecture, "ia64");
             break;
         case PROCESSOR_ARCHITECTURE_INTEL:
             switch (sysInfo.wProcessorLevel)
             {
                 case 4:
-                    ffStrbufSetStatic(&platform->systemArchitecture, "i486");
+                    ffStrbufSetStatic(&info->architecture, "i486");
                     break;
                 case 5:
-                    ffStrbufSetStatic(&platform->systemArchitecture, "i586");
+                    ffStrbufSetStatic(&info->architecture, "i586");
                     break;
                 case 6:
-                    ffStrbufSetStatic(&platform->systemArchitecture, "i686");
+                    ffStrbufSetStatic(&info->architecture, "i686");
                     break;
                 default:
-                    ffStrbufSetStatic(&platform->systemArchitecture, "i386");
+                    ffStrbufSetStatic(&info->architecture, "i386");
                     break;
             }
             break;
         case PROCESSOR_ARCHITECTURE_ARM64:
-            ffStrbufSetStatic(&platform->systemArchitecture, "aarch64");
+            ffStrbufSetStatic(&info->architecture, "aarch64");
             break;
         case PROCESSOR_ARCHITECTURE_ARM:
-            ffStrbufSetStatic(&platform->systemArchitecture, "arm");
+            ffStrbufSetStatic(&info->architecture, "arm");
             break;
         case PROCESSOR_ARCHITECTURE_PPC:
-            ffStrbufSetStatic(&platform->systemArchitecture, "ppc");
+            ffStrbufSetStatic(&info->architecture, "ppc");
             break;
         case PROCESSOR_ARCHITECTURE_MIPS:
-            ffStrbufSetStatic(&platform->systemArchitecture, "mips");
+            ffStrbufSetStatic(&info->architecture, "mips");
             break;
         case PROCESSOR_ARCHITECTURE_ALPHA:
-            ffStrbufSetStatic(&platform->systemArchitecture, "alpha");
+            ffStrbufSetStatic(&info->architecture, "alpha");
             break;
         case PROCESSOR_ARCHITECTURE_ALPHA64:
-            ffStrbufSetStatic(&platform->systemArchitecture, "alpha64");
+            ffStrbufSetStatic(&info->architecture, "alpha64");
             break;
         case PROCESSOR_ARCHITECTURE_UNKNOWN:
         default:
+            ffStrbufSetStatic(&info->architecture, "unknown");
             break;
     }
 
-    platform->pageSize = sysInfo.dwPageSize;
+    info->pageSize = sysInfo.dwPageSize;
 }
 
 void ffPlatformInitImpl(FFPlatform* platform)
@@ -272,6 +286,6 @@ void ffPlatformInitImpl(FFPlatform* platform)
     getHostName(platform);
     getUserShell(platform);
 
-    getSystemReleaseAndVersion(platform);
-    getSystemArchitectureAndPageSize(platform);
+    getSystemReleaseAndVersion(&platform->sysinfo);
+    getSystemArchitectureAndPageSize(&platform->sysinfo);
 }

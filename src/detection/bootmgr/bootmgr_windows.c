@@ -38,15 +38,15 @@ const char* ffDetectBootmgr(FFBootmgrResult* result)
 
     uint8_t buffer[2048];
     wchar_t key[16];
-    wsprintfW(key, L"Boot%04X", value);
+    swprintf(key, ARRAY_SIZE(key), L"Boot%04X", value);
     uint32_t size = GetFirmwareEnvironmentVariableW(key, L"{" FF_EFI_GLOBAL_GUID L"}", buffer, sizeof(buffer));
-    if (size < sizeof(FFEfiLoadOption) || size == sizeof(buffer))
+    if (size < sizeof(FFEfiLoadOption) || size == ARRAY_SIZE(buffer))
         return "GetFirmwareEnvironmentVariableW(Boot####) failed";
 
     ffEfiFillLoadOption((FFEfiLoadOption *)buffer, result);
 
     DWORD uefiSecureBootEnabled = 0, bufSize = 0;
-    if (RegGetValueW(HKEY_LOCAL_MACHINE, L"SYSTEM\\ControlSet001\\Control\\SecureBoot\\State", L"UEFISecureBootEnabled", RRF_RT_REG_DWORD, NULL, &uefiSecureBootEnabled, &bufSize) == ERROR_SUCCESS)
+    if (RegGetValueW(HKEY_LOCAL_MACHINE, L"SYSTEM\\CurrentControlSet\\Control\\SecureBoot\\State", L"UEFISecureBootEnabled", RRF_RT_REG_DWORD, NULL, &uefiSecureBootEnabled, &bufSize) == ERROR_SUCCESS)
         result->secureBoot = !!uefiSecureBootEnabled;
 
     return NULL;

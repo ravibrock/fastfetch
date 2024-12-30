@@ -74,7 +74,20 @@ static void getGnome(FFstrbuf* result, FF_MAYBE_UNUSED FFDEOptions* options)
 
 static void getCinnamon(FFstrbuf* result, FF_MAYBE_UNUSED FFDEOptions* options)
 {
-    ffParsePropFileData("applications/cinnamon.desktop", "X-GNOME-Bugzilla-Version =", result);
+    ffStrbufSetS(result, getenv("CINNAMON_VERSION"));
+
+    if (result->length == 0)
+        ffParsePropFileData("applications/cinnamon.desktop", "X-GNOME-Bugzilla-Version =", result);
+
+    if (result->length == 0 && options->slowVersionDetection)
+    {
+        if (ffProcessAppendStdOut(result, (char* const[]){
+            "cinnamon",
+            "--version",
+            NULL
+        }) == NULL) // Cinnamon 6.2.2
+            ffStrbufSubstrAfterLastC(result, ' ');
+    }
 }
 
 static void getMate(FFstrbuf* result, FFDEOptions* options)
@@ -108,7 +121,7 @@ static const char* getXfce4ByLib(FFstrbuf* result)
 {
 #ifndef FF_DISABLE_DLOPEN
     const char* xfce_version_string(void); // from `xfce4/libxfce4util/xfce-misutils.h
-    FF_LIBRARY_LOAD(xfce4util, NULL, "dlopen libxfce4util" FF_LIBRARY_EXTENSION "failed", "libxfce4util" FF_LIBRARY_EXTENSION, 7);
+    FF_LIBRARY_LOAD(xfce4util, "dlopen libxfce4util" FF_LIBRARY_EXTENSION "failed", "libxfce4util" FF_LIBRARY_EXTENSION, 7);
     FF_LIBRARY_LOAD_SYMBOL_MESSAGE(xfce4util, xfce_version_string);
     ffStrbufSetS(result, ffxfce_version_string());
     return NULL;
@@ -165,8 +178,16 @@ static void getBudgie(FFstrbuf* result, FF_MAYBE_UNUSED FFDEOptions* options)
     ffParsePropFileData("budgie/budgie-version.xml", "<str>", result);
 }
 
+static void getUnity(FFstrbuf* result, FF_MAYBE_UNUSED FFDEOptions* options)
+{
+    if (ffParsePropFile("/usr/bin/unity", "parser = OptionParser(version= \"%prog ", result))
+        ffStrbufSubstrBeforeFirstC(result, '"');
+}
+
 const char* ffDetectDEVersion(const FFstrbuf* deName, FFstrbuf* result, FFDEOptions* options)
 {
+    if (!instance.config.general.detectVersion) return "Disabled by config";
+
     if (ffStrbufEqualS(deName, FF_DE_PRETTY_PLASMA))
         getKDE(result, options);
     else if (ffStrbufEqualS(deName, FF_DE_PRETTY_GNOME))
@@ -181,6 +202,8 @@ const char* ffDetectDEVersion(const FFstrbuf* deName, FFstrbuf* result, FFDEOpti
         getLXQt(result, options);
     else if (ffStrbufEqualS(deName, FF_DE_PRETTY_BUDGIE))
         getBudgie(result, options);
+    else if (ffStrbufEqualS(deName, FF_DE_PRETTY_UNITY))
+        getUnity(result, options);
     else
         return "Unsupported DE";
     return NULL;

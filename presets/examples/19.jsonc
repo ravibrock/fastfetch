@@ -12,7 +12,7 @@
     "logo": {
         "source": " _____ _____ _____ _____ _____ _____ _____ _____ _____\n|   __|  _  |   __|_   _|   __|   __|_   _|     |  |  |\n|   __|     |__   | | | |   __|   __| | | |   --|     |\n|__|  |__|__|_____| |_| |__|  |_____| |_| |_____|__|__|",
         "type": "data",
-        "separate": true,
+        "position": "top",
         "padding": {
             "right": 2
         }
@@ -119,9 +119,10 @@
             "keyColor": "blue"
         },
         {
-            "type": "monitor",
+            "type": "display",
             "key": "MONITOR ({name})",
-            "keyColor": "blue"
+            "keyColor": "blue",
+            "format": "{width}x{height} @ {refresh-rate} Hz - {physical-width}x{physical-height} mm ({inch} inches, {ppi} ppi)"
         },
         {
             "type": "custom", // DesignInfo

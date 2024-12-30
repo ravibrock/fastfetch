@@ -1,16 +1,40 @@
 #include "editor.h"
 #include "common/processing.h"
+#include "common/library.h"
 #include "util/stringUtils.h"
+#include "util/path.h"
+#include "util/binary.h"
 
 #include <stdlib.h>
 
 #ifdef _WIN32
-#include <windows.h>
 static inline char* realpath(const char* restrict file_name, char* restrict resolved_name)
 {
     return _fullpath(resolved_name, file_name, _MAX_PATH);
 }
 #endif
+
+static bool extractNvimVersionFromBinary(const char* str, FF_MAYBE_UNUSED uint32_t len, void* userdata)
+{
+    if (!ffStrStartsWith(str, "NVIM v")) return true;
+    ffStrbufSetS((FFstrbuf*) userdata, str + strlen("NVIM v"));
+    return false;
+}
+
+static bool extractVimVersionFromBinary(const char* str, FF_MAYBE_UNUSED uint32_t len, void* userdata)
+{
+    if (!ffStrStartsWith(str, "VIM - Vi IMproved ")) return true;
+    ffStrbufSetS((FFstrbuf*) userdata, str + strlen("VIM - Vi IMproved "));
+    ffStrbufSubstrBeforeFirstC(userdata, ' ');
+    return false;
+}
+
+static bool extractNanoVersionFromBinary(const char* str, FF_MAYBE_UNUSED uint32_t len, void* userdata)
+{
+    if (!ffStrStartsWith(str, "GNU nano ")) return true;
+    ffStrbufSetS((FFstrbuf*) userdata, str + strlen("GNU nano "));
+    return false;
+}
 
 const char* ffDetectEditor(FFEditorResult* result)
 {
@@ -26,39 +50,26 @@ const char* ffDetectEditor(FFEditorResult* result)
             return "$VISUAL or $EDITOR not set";
     }
 
-    #ifndef _WIN32
-    if (result->name.chars[0] != '/')
-    {
-        if (ffProcessAppendStdOut(&result->path, (char* const[]){
-            FASTFETCH_TARGET_DIR_USR "/bin/which",
-            result->name.chars,
-            NULL,
-        }) != NULL || result->path.length == 0)
-            return NULL;
-    }
-    #else
-    if (!(result->name.length > 3 && ffCharIsEnglishAlphabet(result->name.chars[0]) && result->name.chars[1] == ':' && result->name.chars[2] == '\\'))
-    {
-        char buf[32];
-        uint32_t len = GetSystemDirectoryA(buf, sizeof(buf));
-        if (len < strlen("C:\\WINDOWS\\system32")) return NULL;
-        strncpy(buf + len, "\\where.exe", sizeof(buf) - len);
-        if (ffProcessAppendStdOut(&result->path, (char* const[]){
-            buf,
-            result->name.chars,
-            NULL,
-        }) != NULL || result->path.length == 0)
-            return NULL;
-    }
-    #endif
-    else
+    if (ffIsAbsolutePath(result->name.chars))
         ffStrbufSet(&result->path, &result->name);
+    else
+    {
+        const char* error = ffFindExecutableInPath(result->name.chars, &result->path);
+        if (error) return NULL;
+    }
 
-    char buf[PATH_MAX + 1];
-    if (!realpath(result->path.chars, buf))
-        return NULL;
+    {
+        char buf[PATH_MAX + 1];
+        if (!realpath(result->path.chars, buf))
+            return NULL;
 
-    ffStrbufSetS(&result->path, buf);
+        // WIN32: Should we handle scoop shim exe here?
+
+        #ifdef __linux__
+        if (!ffStrEndsWith(buf, "/snap"))
+        #endif
+            ffStrbufSetS(&result->path, buf);
+    }
 
     {
         uint32_t index = ffStrbufLastIndexC(&result->path,
@@ -80,10 +91,22 @@ const char* ffDetectEditor(FFEditorResult* result)
         #endif
     }
 
+    if (!instance.config.general.detectVersion) return NULL;
+
+    if (ffStrbufEqualS(&result->exe, "nvim"))
+        ffBinaryExtractStrings(result->path.chars, extractNvimVersionFromBinary, &result->version, (uint32_t) strlen("NVIM v0.0.0"));
+    else if (ffStrbufEqualS(&result->exe, "vim") || ffStrbufStartsWithS(&result->exe, "vim."))
+        ffBinaryExtractStrings(result->path.chars, extractVimVersionFromBinary, &result->version, (uint32_t) strlen("VIM - Vi IMproved 0.0"));
+    else if (ffStrbufEqualS(&result->exe, "nano"))
+        ffBinaryExtractStrings(result->path.chars, extractNanoVersionFromBinary, &result->version, (uint32_t) strlen("GNU nano 0.0"));
+
+    if (result->version.length > 0) return NULL;
+
     const char* param = NULL;
     if (
         ffStrbufEqualS(&result->exe, "nano") ||
         ffStrbufEqualS(&result->exe, "vim") ||
+        ffStrbufStartsWithS(&result->exe, "vim.") || // vim.basic/vim.tiny
         ffStrbufEqualS(&result->exe, "nvim") ||
         ffStrbufEqualS(&result->exe, "micro") ||
         ffStrbufEqualS(&result->exe, "emacs") ||
@@ -112,24 +135,14 @@ const char* ffDetectEditor(FFEditorResult* result)
         return NULL;
 
     ffStrbufSubstrBeforeFirstC(&result->version, '\n');
-    for (uint32_t iStart = 0; iStart < result->version.length; ++iStart)
-    {
-        char c = result->version.chars[iStart];
-        if (ffCharIsDigit(c))
-        {
-            for (uint32_t iEnd = iStart + 1; iEnd < result->version.length; ++iEnd)
-            {
-                char c = result->version.chars[iEnd];
-                if (isspace(c))
-                {
-                    ffStrbufSubstrBefore(&result->version, iEnd);
-                    break;
-                }
-            }
-            if (iStart > 0)
-                ffStrbufSubstrAfter(&result->version, iStart - 1);
-            break;
-        }
+    const char* versionStart = strpbrk(result->version.chars, "0123456789");
+    if (versionStart != NULL) {
+        const char* versionEnd = strpbrk(versionStart, " \t\v\f\r");
+        if (versionEnd != NULL)
+            ffStrbufSubstrBefore(&result->version, (uint32_t)(versionEnd - result->version.chars));
+
+        if (versionStart != result->version.chars)
+            ffStrbufSubstrAfter(&result->version, (uint32_t)(versionStart - result->version.chars - 1));
     }
 
     return NULL;

@@ -13,9 +13,10 @@ const char* ffDetectCPU(const FFCPUOptions* options, FFCPUResult* cpu)
         " 2-Core", " 4-Core", " 6-Core", " 8-Core", " 10-Core", " 12-Core", " 14-Core", " 16-Core",
         " with Radeon Graphics"
     };
-    ffStrbufRemoveStrings(&cpu->name, sizeof(removeStrings) / sizeof(removeStrings[0]), removeStrings);
+    ffStrbufRemoveStrings(&cpu->name, ARRAY_SIZE(removeStrings), removeStrings);
     ffStrbufSubstrBeforeFirstC(&cpu->name, '@'); //Cut the speed output in the name as we append our own
     ffStrbufTrimRight(&cpu->name, ' '); //If we removed the @ in previous step there was most likely a space before it
+    ffStrbufRemoveDupWhitespaces(&cpu->name);
     return NULL;
 }
 
@@ -36,6 +37,22 @@ const char* ffCPUAppleCodeToName(uint32_t code)
         case 6030: return "Apple M3 Pro";
         case 6031:
         case 6034: return "Apple M3 Max";
-        default: return "Apple Silicon";
+        case 8132: return "Apple M4";
+        case 6040: return "Apple M4 Pro";
+        case 6041: return "Apple M4 Max";
+        default: return NULL;
+    }
+}
+
+const char* ffCPUQualcommCodeToName(uint32_t code)
+{
+    // https://github.com/AsahiLinux/docs/wiki/Codenames
+    switch (code)
+    {
+        case 7180: return "Qualcomm Snapdragon 7c";
+        case 7280: return "Qualcomm Snapdragon 7c+ Gen 3";
+        case 8180: return "Qualcomm Snapdragon 8cx Gen 2 5G";
+        case 8280: return "Qualcomm Snapdragon 8cx Gen 3";
+        default: return NULL;
     }
 }

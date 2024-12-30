@@ -128,7 +128,7 @@
             "desc": "Set the timeout (ms) when waiting for child processes",
             "arg": {
                 "type": "num",
-                "default": 1000
+                "default": 5000
             }
         },
         {
@@ -147,6 +147,16 @@
                     "sysfs-only": "Use `/sys/class/drm` only",
                     "false": "Try `wayland`, then `x11`, then `drm`"
                 }
+            }
+        },
+        {
+            "long": "detect-version",
+            "desc": "Whether to detect and display the version of terminal, shell and editor",
+            "remark": "Mainly for benchmarking",
+            "arg": {
+                "type": "bool",
+                "optional": true,
+                "default": true
             }
         }
     ],
@@ -496,6 +506,27 @@
             }
         },
         {
+            "long": "key-padding-left",
+            "desc": "Set the left padding of keys to <num> characters",
+            "arg": {
+                "type": "num"
+            }
+        },
+        {
+            "long": "key-type",
+            "desc": "Set whether to show icon before string keys",
+            "arg": {
+                "type": "enum",
+                "enum": {
+                    "none": "Disable keys",
+                    "string": "Show string",
+                    "icon": "Show icon (requires newest nerd font)",
+                    "both": "Show both icon and string"
+                },
+                "default": "string"
+            }
+        },
+        {
             "long": "bright-color",
             "desc": "Set if the keys, title and ASCII logo should be printed in bright color",
             "arg": {
@@ -537,19 +568,6 @@
                 "type": "bool",
                 "optional": true,
                 "default": false
-            }
-        },
-        {
-            "long": "binary-prefix",
-            "desc": "Set the binary prefix to used",
-            "arg": {
-                "type": "enum",
-                "enum": {
-                    "IEC": "1024 Bytes = 1 KiB, 1024 KiB = 1 MiB, ...",
-                    "SI": "1000 Bytes = 1 KB, 1000 KB = 1 MB, ...",
-                    "JEDEC": "1024 Bytes = 1 kB, 1024 kB = 1 MB, ..."
-                },
-                "default": "IEC"
             }
         },
         {
@@ -660,6 +678,19 @@
             }
         },
         {
+            "long": "size-binary-prefix",
+            "desc": "Set the binary prefix to used when formatting sizes",
+            "arg": {
+                "type": "enum",
+                "enum": {
+                    "IEC": "1024 Bytes = 1 KiB, 1024 KiB = 1 MiB, ...",
+                    "SI": "1000 Bytes = 1 KB, 1000 KB = 1 MB, ...",
+                    "JEDEC": "1024 Bytes = 1 kB, 1024 kB = 1 MB, ..."
+                },
+                "default": "IEC"
+            }
+        },
+        {
             "long": "size-max-prefix",
             "desc": "Set the largest binary prefix to use when formatting sizes",
             "arg": {
@@ -676,6 +707,14 @@
                     "YB": "YiB"
                 },
                 "default": "YB"
+            }
+        },
+        {
+            "long": "freq-ndigits",
+            "desc": "Set the number of digits to keep after the decimal point when printing CPU / GPU frequency in GHz",
+            "arg": {
+                "type": "num",
+                "default": 2
             }
         },
         {
@@ -725,194 +764,6 @@
                 "type": "color",
                 "default": "light_red"
             }
-        },
-        {
-            "long": "ts-version",
-            "desc": "Whether to detect and display the version of terminal and shell",
-            "remark": "Mainly for benchmarking",
-            "arg": {
-                "type": "bool",
-                "optional": true,
-                "default": true
-            }
-        }
-    ],
-    "Library path": [
-        {
-            "long": "lib-pci",
-            "desc": "Pciutils. Used for GPU output",
-            "arg": {
-                "type": "path"
-            }
-        },
-        {
-            "long": "lib-vulkan",
-            "desc": "Vulkan module & fallback for GPU output",
-            "arg": {
-                "type": "path"
-            }
-        },
-        {
-            "long": "lib-wayland",
-            "desc": "Better display performance and output in wayland sessions",
-            "arg": {
-                "type": "path"
-            }
-        },
-        {
-            "long": "lib-xcb-randr",
-            "desc": "X11 sessions for better display detection and faster WM detection",
-            "arg": {
-                "type": "path"
-            }
-        },
-        {
-            "long": "lib-xcb",
-            "desc": "X11 sessions for better display detection and faster WM detection",
-            "arg": {
-                "type": "path"
-            }
-        },
-        {
-            "long": "lib-xrandr",
-            "desc": "X11 sessions for better display detection and faster WM detection",
-            "arg": {
-                "type": "path"
-            }
-        },
-        {
-            "long": "lib-x11",
-            "desc": "X11 sessions for better display detection and faster WM detection",
-            "arg": {
-                "type": "path"
-            }
-        },
-        {
-            "long": "lib-drm",
-            "desc": "Used for fast resolution and refresh rate detection",
-            "remark": "Linux only",
-            "arg": {
-                "type": "path"
-            }
-        },
-        {
-            "long": "lib-gio",
-            "desc": "Needed for values that are only stored GSettings",
-            "arg": {
-                "type": "path"
-            }
-        },
-        {
-            "long": "lib-dconf",
-            "desc": "Needed for values that are only stored in DConf + Fallback for GSettings",
-            "arg": {
-                "type": "path"
-            }
-        },
-        {
-            "long": "lib-dbus",
-            "desc": "Bluetooth, Player & Media detection",
-            "arg": {
-                "type": "path"
-            }
-        },
-        {
-            "long": "lib-xfconf",
-            "desc": "Needed for XFWM theme and XFCE Terminal font",
-            "arg": {
-                "type": "path"
-            }
-        },
-        {
-            "long": "lib-sqlite3",
-            "desc": "Needed for pkg & rpm package count",
-            "arg": {
-                "type": "path"
-            }
-        },
-        {
-            "long": "lib-rpm",
-            "desc": "Slower fallback for rpm package count",
-            "arg": {
-                "type": "path"
-            }
-        },
-        {
-            "long": "lib-imagemagick",
-            "desc": "Images in terminal using sixel or kitty graphics protocol",
-            "arg": {
-                "type": "path"
-            }
-        },
-        {
-            "long": "lib-z",
-            "desc": "Libz. Faster image output when using kitty graphics protocol",
-            "arg": {
-                "type": "path"
-            }
-        },
-        {
-            "long": "lib-chafa",
-            "desc": "Image output as ascii art",
-            "arg": {
-                "type": "path"
-            }
-        },
-        {
-            "long": "lib-egl",
-            "desc": "Needed by the OpenGL module for gl context creation",
-            "arg": {
-                "type": "path"
-            }
-        },
-        {
-            "long": "lib-glx",
-            "desc": "Needed by the OpenGL module for gl context creation",
-            "arg": {
-                "type": "path"
-            }
-        },
-        {
-            "long": "lib-osmesa",
-            "desc": "Needed by the OpenGL module for gl context creation",
-            "arg": {
-                "type": "path"
-            }
-        },
-        {
-            "long": "lib-opencl",
-            "desc": "OpenCL module",
-            "arg": {
-                "type": "path"
-            }
-        },
-        {
-            "long": "lib-pulse",
-            "desc": "Pulseaudio. Used for Sound detection",
-            "arg": {
-                "type": "path"
-            }
-        },
-        {
-            "long": "lib-nm",
-            "desc": "NetworkManager. Used for Wifi detection",
-            "arg": {
-                "type": "path"
-            }
-        },
-        {
-            "long": "lib-freetype",
-            "desc": "Used for Termux font detection",
-            "arg": {
-                "type": "path"
-            }
-        },
-        {
-            "long": "lib-ddcutil",
-            "desc": "Used for brightness detection of external displays",
-            "arg": {
-                "type": "path"
-            }
         }
     ],
     "Module specific": [
@@ -954,7 +805,7 @@
         },
         {
             "long": "separator-string",
-            "desc": "Set the string printed by the separator module",
+            "desc": "Set the string to be printed by the separator line",
             "arg": {
                 "type": "str",
                 "default": "-"
@@ -962,10 +813,19 @@
         },
         {
             "long": "separator-output-color",
-            "desc": "Set the color of the separator module",
+            "desc": "Set the color of the separator line",
             "arg": {
                 "type": "color",
                 "default": "default"
+            }
+        },
+        {
+            "long": "separator-length",
+            "desc": "Set the length of the separator line",
+            "remark": "Set to 0 to automatically calculate it with the title length",
+            "arg": {
+                "type": "num",
+                "default": "0"
             }
         },
         {
@@ -1057,6 +917,14 @@
             }
         },
         {
+            "long": "diskio-wait-time",
+            "desc": "Set the wait time (in ms) when detecting disk usage",
+            "arg": {
+                "type": "num",
+                "default": 1000
+            }
+        },
+        {
             "long": "physicaldisk-name-prefix",
             "desc": "Show disks with given name prefix only",
             "arg": {
@@ -1141,6 +1009,14 @@
             }
         },
         {
+            "long": "brightness-compact",
+            "desc": "Set if multiple results should be printed in one line",
+            "arg": {
+                "type": "bool",
+                "default": false
+            }
+        },
+        {
             "long": "sound-type",
             "desc": "Set what type of sound devices should be printed",
             "arg": {
@@ -1176,14 +1052,6 @@
             }
         },
         {
-            "long": "cpu-freq-ndigits",
-            "desc": "Set the number of digits to keep after the decimal point when printing CPU frequency",
-            "arg": {
-                "type": "num",
-                "default": 2
-            }
-        },
-        {
             "long": "cpu-show-pe-core-count",
             "desc": "Detect and display CPU frequency of different core types (eg. Pcore and Ecore) if supported",
             "arg": {
@@ -1208,6 +1076,14 @@
                 "type": "bool",
                 "optional": true,
                 "default": false
+            }
+        },
+        {
+            "long": "cpuusage-wait-time",
+            "desc": "Set the wait time (in ms) when detecting CPU usage",
+            "arg": {
+                "type": "num",
+                "default": 200
             }
         },
         {
@@ -1256,6 +1132,7 @@
                     "pci": "Search PCI devices, which do not requires GPU driver installed. Not supported on Windows and macOS",
                     "vulkan": "Use Vulkan API. Slow and requires proper vulkan driver installed. Used for Android",
                     "opencl": "Use OpenCL API. Slow and requires proper OpenCL driver installed",
+                    "eglext": "Use extensions of EGL API. Slow but support multiple GPUs",
                     "opengl": "Use OpenGL API. Slow and only detects one GPU"
                 },
                 "default": "auto"
@@ -1337,6 +1214,24 @@
             }
         },
         {
+            "long": "localip-show-mtu",
+            "desc": "Show net interface's MTU (Maximum Transmission Unit) size in bytes",
+            "arg": {
+                "type": "bool",
+                "optional": true,
+                "default": false
+            }
+        },
+        {
+            "long": "localip-show-speed",
+            "desc": "Show net interface's link speed with human-readable format (or an 1Mb units integer in JSON format)",
+            "arg": {
+                "type": "bool",
+                "optional": true,
+                "default": false
+            }
+        },
+        {
             "long": "localip-show-prefix-len",
             "desc": "Show network prefix length (/N) in local ip module",
             "arg": {
@@ -1365,6 +1260,15 @@
         {
             "long": "localip-show-all-ips",
             "desc": "Show all IPs bound to the same interface. By default only the first IP is shown",
+            "arg": {
+                "type": "bool",
+                "optional": true,
+                "default": false
+            }
+        },
+        {
+            "long": "localip-show-flags",
+            "desc": "Show net interface flags in local ip module",
             "arg": {
                 "type": "bool",
                 "optional": true,
@@ -1416,6 +1320,14 @@
             "arg": {
                 "type": "bool",
                 "default": false
+            }
+        },
+        {
+            "long": "netio-wait-time",
+            "desc": "Set the wait time (in ms) when detecting network usage",
+            "arg": {
+                "type": "num",
+                "default": 1000
             }
         },
         {
@@ -1525,6 +1437,15 @@
             }
         },
         {
+            "long": "command-param",
+            "desc": "Set the parameter used when starting the shell",
+            "remark": "If set to empty string, it will be ignored",
+            "arg": {
+                "type": "str",
+                "default": "\"/c\" for Windows; \"-c\" for *nix"
+            }
+        },
+        {
             "long": "command-key",
             "desc": "Set the module key to display",
             "arg": {
@@ -1545,13 +1466,14 @@
                 "type": "enum",
                 "enum": {
                     "block": "\u2588\u2588\u2588",
+                    "background": "(whitespaces with background)",
                     "circle": "\u25cf",
                     "diamond": "\u25c6",
                     "triangle": "\u25b2",
                     "square": "\u25a0",
                     "star": "\u2605"
                 },
-                "default": "block"
+                "default": "background"
             }
         },
         {
@@ -1635,6 +1557,14 @@
             "pseudo": true
         },
         {
+            "long": "<module>-key-icon",
+            "desc": "Set the icon to be displayed by \"--key-type icon\"",
+            "arg": {
+                "type": "string"
+            },
+            "pseudo": true
+        },
+        {
             "long": "<module>-output-color",
             "desc": "Override the global \"--color-output\" option for each specific module",
             "arg": {
@@ -1670,6 +1600,24 @@
             ],
             "arg": {
                 "type": "num"
+            },
+            "pseudo": true
+        },
+        {
+            "long": "<module>-percent-type",
+            "desc": "Set the percentage output type",
+            "remark": [
+                "0 for use global `--percent-type` value",
+                "1 for percentage number",
+                "2 for multi-color bar",
+                "3 for both",
+                "6 for bar only",
+                "9 for colored number",
+                "10 for monochrome bar"
+            ],
+            "arg": {
+                "type": "num",
+                "default": 0
             },
             "pseudo": true
         },

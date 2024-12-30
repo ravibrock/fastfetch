@@ -2,6 +2,7 @@
 #include "common/commandoption.h"
 #include "common/io/io.h"
 #include "common/jsonconfig.h"
+#include "common/printing.h"
 #include "detection/version/version.h"
 #include "util/stringUtils.h"
 #include "util/mallocHelper.h"
@@ -15,16 +16,65 @@
     #include "util/windows/getline.h"
 #endif
 
+static void printCommandFormatHelpJson(void)
+{
+    yyjson_mut_doc* doc = yyjson_mut_doc_new(NULL);
+    yyjson_mut_val* root = yyjson_mut_obj(doc);
+    yyjson_mut_doc_set_root(doc, root);
+
+    for (uint32_t i = 0; i <= 'Z' - 'A'; ++i)
+    {
+        for (FFModuleBaseInfo** modules = ffModuleInfos[i]; *modules; ++modules)
+        {
+            FFModuleBaseInfo* baseInfo = *modules;
+            if (!baseInfo->formatArgs.count) continue;
+
+            FF_STRBUF_AUTO_DESTROY type = ffStrbufCreateS(baseInfo->name);
+            ffStrbufLowerCase(&type);
+            ffStrbufAppendS(&type, "Format");
+
+            yyjson_mut_val* obj = yyjson_mut_obj(doc);
+            if (yyjson_mut_obj_add(root, yyjson_mut_strbuf(doc, &type), obj))
+            {
+                FF_STRBUF_AUTO_DESTROY content = ffStrbufCreateF("Output format of the module `%s`. See `-h format` for formatting syntax\n", baseInfo->name);
+                for (unsigned i = 0; i < baseInfo->formatArgs.count; i++)
+                {
+                    const FFModuleFormatArg* arg = &baseInfo->formatArgs.args[i];
+                    ffStrbufAppendF(&content, "    %u. {%s}: %s\n", i + 1, arg->name, arg->desc);
+                }
+                ffStrbufTrimRight(&content, '\n');
+                yyjson_mut_obj_add_strbuf(doc, obj, "description", &content);
+                yyjson_mut_obj_add_str(doc, obj, "type", "string");
+            }
+        }
+    }
+    yyjson_mut_write_fp(stdout, doc, YYJSON_WRITE_PRETTY, NULL, NULL);
+    putchar('\n');
+    yyjson_mut_doc_free(doc);
+}
+
 static void printCommandFormatHelp(const char* command)
 {
     FF_STRBUF_AUTO_DESTROY type = ffStrbufCreateNS((uint32_t) (strlen(command) - strlen("-format")), command);
+    ffStrbufLowerCase(&type);
     for (FFModuleBaseInfo** modules = ffModuleInfos[toupper(command[0]) - 'A']; *modules; ++modules)
     {
         FFModuleBaseInfo* baseInfo = *modules;
         if (ffStrbufIgnCaseEqualS(&type, baseInfo->name))
         {
-            if (baseInfo->printHelpFormat)
-                baseInfo->printHelpFormat();
+            if (baseInfo->formatArgs.count > 0)
+            {
+                printf("--%s-format:\n", type.chars);
+                printf("Sets the format string for %s output.\n", baseInfo->name);
+                puts("To see how a format string is constructed, take a look at \"fastfetch --help format\".");
+                puts("The following values are passed:");
+
+                for (unsigned i = 0; i < baseInfo->formatArgs.count; i++)
+                {
+                    const FFModuleFormatArg* arg = &baseInfo->formatArgs.args[i];
+                    printf("%16s {%u}: %s\n", arg->name, i + 1, arg->desc);
+                }
+            }
             else
                 fprintf(stderr, "Error: Module '%s' doesn't support output formatting\n", baseInfo->name);
             return;
@@ -252,6 +302,8 @@ static void printCommandHelp(const char* command)
         puts(FASTFETCH_DATATEXT_HELP_COLOR);
     else if(ffStrEqualsIgnCase(command, "format"))
         puts(FASTFETCH_DATATEXT_HELP_FORMAT);
+    else if(ffStrEqualsIgnCase(command, "format-json"))
+        printCommandFormatHelpJson();
     else if(ffCharIsEnglishAlphabet(command[0]) && ffStrEndsWithIgnCase(command, "-format")) // <module>-format
         printCommandFormatHelp(command);
     else if(!printSpecificCommandHelp(command))
@@ -266,10 +318,13 @@ static void listAvailablePresets(bool pretty)
         ffListFilesRecursively(path->chars, pretty);
     }
 
-    FF_STRBUF_AUTO_DESTROY absolutePath = ffStrbufCreateCopy(&instance.state.platform.exePath);
-    ffStrbufSubstrBeforeLastC(&absolutePath, '/');
-    ffStrbufAppendS(&absolutePath, "/presets/");
-    ffListFilesRecursively(absolutePath.chars, pretty);
+    if (instance.state.platform.exePath.length)
+    {
+        FF_STRBUF_AUTO_DESTROY absolutePath = ffStrbufCreateCopy(&instance.state.platform.exePath);
+        ffStrbufSubstrBeforeLastC(&absolutePath, '/');
+        ffStrbufAppendS(&absolutePath, "/presets/");
+        ffListFilesRecursively(absolutePath.chars, pretty);
+    }
 }
 
 static void listAvailableLogos(void)
@@ -319,44 +374,6 @@ static void listModules(bool pretty)
     }
 }
 
-// Temporary copy before new release of yyjson
-static bool ffyyjson_locate_pos(const char *str, size_t len, size_t pos,
-                                size_t *line, size_t *col, size_t *chr) {
-    size_t line_sum = 0, line_pos = 0, chr_sum = 0;
-    const uint8_t *cur = (const uint8_t *)str;
-    const uint8_t *end = cur + pos;
-
-    if (!str || pos > len) {
-        if (line) *line = 0;
-        if (col) *col = 0;
-        if (chr) *chr = 0;
-        return false;
-    }
-
-    while (cur < end) {
-        uint8_t c = *cur;
-        chr_sum += 1;
-        if (__builtin_expect(c < 0x80, true)) {         /* 0xxxxxxx (0x00-0x7F) ASCII */
-            if (c == '\n') {
-                line_sum += 1;
-                line_pos = chr_sum;
-            }
-            cur += 1;
-        }
-        else if (c < 0xC0) cur += 1;    /* 10xxxxxx (0x80-0xBF) Invalid */
-        else if (c < 0xE0) cur += 2;    /* 110xxxxx (0xC0-0xDF) 2-byte UTF-8 */
-        else if (c < 0xF0) cur += 3;    /* 1110xxxx (0xE0-0xEF) 3-byte UTF-8 */
-        else if (c < 0xF8) cur += 4;    /* 11110xxx (0xF0-0xF7) 4-byte UTF-8 */
-        else               cur += 1;    /* 11111xxx (0xF8-0xFF) Invalid */
-    }
-
-    if (line) *line = line_sum + 1;
-    if (col) *col = chr_sum - line_pos + 1;
-    if (chr) *chr = chr_sum;
-    return true;
-}
-
-
 static bool parseJsoncFile(const char* path)
 {
     assert(!instance.state.configDoc);
@@ -371,7 +388,7 @@ static bool parseJsoncFile(const char* path)
                 size_t row = 0, col = error.pos;
                 FF_STRBUF_AUTO_DESTROY content = ffStrbufCreate();
                 if (ffAppendFileBuffer(path, &content))
-                    ffyyjson_locate_pos(content.chars, content.length, error.pos, &row, &col, NULL);
+                    yyjson_locate_pos(content.chars, content.length, error.pos, &row, &col, NULL);
                 fprintf(stderr, "Error: failed to parse JSON config file `%s` at (%zu, %zu): %s\n", path, row, col, error.msg);
                 exit(477);
             }
@@ -391,7 +408,6 @@ static bool parseJsoncFile(const char* path)
             (error = ffOptionsParseLogoJsonConfig(&instance.config.logo, root)) ||
             (error = ffOptionsParseGeneralJsonConfig(&instance.config.general, root)) ||
             (error = ffOptionsParseDisplayJsonConfig(&instance.config.display, root)) ||
-            (error = ffOptionsParseLibraryJsonConfig(&instance.config.library, root)) ||
             false
         ) {
             fprintf(stderr, "JsonConfig Error: %s\n", error);
@@ -406,7 +422,7 @@ static void generateConfigFile(bool force, const char* filePath)
 {
     if (!filePath)
     {
-        ffStrbufSet(&instance.state.genConfigPath, (FFstrbuf*) ffListGet(&instance.state.platform.configDirs, 0));
+        ffStrbufSet(&instance.state.genConfigPath, FF_LIST_GET(FFstrbuf, instance.state.platform.configDirs, 0));
         ffStrbufAppendS(&instance.state.genConfigPath, "fastfetch/config.jsonc");
     }
     else
@@ -501,9 +517,8 @@ static void optionParseConfigFile(FFdata* data, const char* key, const char* val
 
 static void printVersion()
 {
-    FFVersionResult result = {};
-    ffDetectVersion(&result);
-    printf("%s %s%s%s (%s)\n", result.projectName, result.version, result.versionTweak, result.debugMode ? "-debug" : "", result.architecture);
+    FFVersionResult* result = &ffVersionResult;
+    printf("%s %s%s%s (%s)\n", result->projectName, result->version, result->versionTweak, result->debugMode ? "-debug" : "", result->architecture);
 }
 
 static void parseCommand(FFdata* data, char* key, char* value)
@@ -635,7 +650,6 @@ static void parseOption(FFdata* data, const char* key, const char* value)
         ffOptionsParseGeneralCommandLine(&instance.config.general, key, value) ||
         ffOptionsParseLogoCommandLine(&instance.config.logo, key, value) ||
         ffOptionsParseDisplayCommandLine(&instance.config.display, key, value) ||
-        ffOptionsParseLibraryCommandLine(&instance.config.library, key, value) ||
         ffParseModuleOptions(key, value)
     ) {}
 
@@ -727,7 +741,6 @@ static void writeConfigFile(FFdata* data, const FFstrbuf* filename)
     ffOptionsGenerateLogoJsonConfig(&instance.config.logo, doc);
     ffOptionsGenerateDisplayJsonConfig(&instance.config.display, doc);
     ffOptionsGenerateGeneralJsonConfig(&instance.config.general, doc);
-    ffOptionsGenerateLibraryJsonConfig(&instance.config.library, doc);
     ffMigrateCommandOptionToJsonc(data, doc);
 
     if (ffStrbufEqualS(filename, "-"))

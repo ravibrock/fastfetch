@@ -75,10 +75,10 @@ const char* ffDetectPhysicalMemory(FFlist* result)
     if (!data)
         return "Memory device is not found in SMBIOS data";
 
-    for (; data->Header.Type == FF_SMBIOS_TYPE_MEMORY_DEVICE;
-           data = (const FFSmbiosMemoryDevice*) ffSmbiosNextEntry(&data->Header))
+    for (; data->Header.Type < FF_SMBIOS_TYPE_END_OF_TABLE;
+        data = (const FFSmbiosMemoryDevice*) ffSmbiosNextEntry(&data->Header))
     {
-        if (data->Size == 0) continue;
+        if (data->Header.Type != FF_SMBIOS_TYPE_MEMORY_DEVICE || data->Size == 0) continue;
 
         const char* strings = (const char*) data + data->Header.Length;
 
@@ -113,7 +113,15 @@ const char* ffDetectPhysicalMemory(FFlist* result)
             }
         }
 
-        ffStrbufSetF(&device->locator, "%s/%s", ffSmbiosLocateString(strings, data->BankLocator), ffSmbiosLocateString(strings, data->DeviceLocator));
+        // https://github.com/fastfetch-cli/fastfetch/issues/1051#issuecomment-2206687345
+        const char* lbank = ffSmbiosLocateString(strings, data->BankLocator);
+        const char* ldevice = ffSmbiosLocateString(strings, data->DeviceLocator);
+        if (lbank && ldevice)
+            ffStrbufSetF(&device->locator, "%s/%s", lbank, ldevice);
+        else if (lbank)
+            ffStrbufSetS(&device->locator, lbank);
+        else if (ldevice)
+            ffStrbufSetS(&device->locator, ldevice);
 
         switch (data->FormFactor)
         {
@@ -183,6 +191,7 @@ const char* ffDetectPhysicalMemory(FFlist* result)
                 device->maxSpeed = data->Speed == 0xFFFF ? data->ExtendedSpeed : data->Speed;
 
             ffStrbufSetStatic(&device->vendor, ffSmbiosLocateString(strings, data->Manufacturer));
+            ffCleanUpSmbiosValue(&device->vendor);
             FFPhysicalMemoryUpdateVendorString(device);
 
             ffStrbufSetStatic(&device->serial, ffSmbiosLocateString(strings, data->SerialNumber));

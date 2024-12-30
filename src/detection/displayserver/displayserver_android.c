@@ -1,7 +1,8 @@
 #include "displayserver.h"
 #include "common/settings.h"
-
 #include "common/processing.h"
+
+#include <math.h>
 
 static void detectWithDumpsys(FFDisplayServerResult* ds)
 {
@@ -60,10 +61,16 @@ static void detectWithDumpsys(FFDisplayServerResult* ds)
                 0,
                 0,
                 0,
+                0,
+                0,
+                0,
                 &name,
                 FF_DISPLAY_TYPE_UNKNOWN,
                 false,
-                0
+                0,
+                0,
+                0,
+                "dumpsys"
             );
         }
 
@@ -79,21 +86,29 @@ static bool detectWithGetprop(FFDisplayServerResult* ds)
     if (ffSettingsGetAndroidProperty("persist.sys.miui_resolution", &buffer) &&
         ffStrbufContainC(&buffer, ','))
     {
-        // 1440,3200,560 => width,height,ppi
+        // 1440,3200,560 => width,height,densityDpi
         uint32_t width = (uint32_t) ffStrbufToUInt(&buffer, 0);
         ffStrbufSubstrAfterFirstC(&buffer, ',');
         uint32_t height = (uint32_t) ffStrbufToUInt(&buffer, 0);
+        ffStrbufSubstrAfterFirstC(&buffer, ',');
+        double scaleFactor = (double) ffStrbufToUInt(&buffer, 0) / 160.;
         return ffdsAppendDisplay(ds,
             width,
             height,
             0,
+            (uint32_t) (width / scaleFactor + .5),
+            (uint32_t) (height / scaleFactor + .5),
             0,
             0,
             0,
             0,
+            NULL,
             FF_DISPLAY_TYPE_BUILTIN,
             false,
-            0
+            0,
+            0,
+            0,
+            "getprop"
         );
     }
 

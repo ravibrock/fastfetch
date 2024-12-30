@@ -2,87 +2,277 @@
 #include "common/io/io.h"
 #include "common/processing.h"
 #include "common/properties.h"
-#include "detection/temps/temps_linux.h"
 #include "util/mallocHelper.h"
 #include "util/stringUtils.h"
 
 #include <sys/sysinfo.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <dirent.h>
+
+static double parseHwmonDir(FFstrbuf* dir, FFstrbuf* buffer)
+{
+    //https://www.kernel.org/doc/Documentation/hwmon/sysfs-interface
+    uint32_t dirLength = dir->length;
+    ffStrbufAppendS(dir, "temp1_input");
+
+    if(!ffReadFileBuffer(dir->chars, buffer))
+    {
+        // Some badly implemented system put temp file in /hwmonN/device
+        ffStrbufSubstrBefore(dir, dirLength);
+        ffStrbufAppendS(dir, "device/");
+        dirLength = dir->length;
+        ffStrbufAppendS(dir, "temp1_input");
+
+        if(!ffReadFileBuffer(dir->chars, buffer))
+            return 0.0/0.0;
+    }
+
+    ffStrbufSubstrBefore(dir, dirLength);
+
+    double value = ffStrbufToDouble(buffer);// millidegree Celsius
+
+    if(value != value)
+        return 0.0/0.0;
+
+    ffStrbufAppendS(dir, "name");
+    if (!ffReadFileBuffer(dir->chars, buffer))
+        return 0.0/0.0;
+
+    ffStrbufTrimRightSpace(buffer);
+
+    if(
+        ffStrbufContainS(buffer, "cpu") ||
+        ffStrbufEqualS(buffer, "k10temp") || // AMD
+        ffStrbufEqualS(buffer, "coretemp") // Intel
+    ) return value / 1000.;
+
+    return 0.0/0.0;
+}
+
+static double detectCPUTemp(void)
+{
+    FF_STRBUF_AUTO_DESTROY baseDir = ffStrbufCreateA(64);
+    ffStrbufAppendS(&baseDir, "/sys/class/hwmon/");
+
+    FF_STRBUF_AUTO_DESTROY buffer = ffStrbufCreate();
+
+    uint32_t baseDirLength = baseDir.length;
+
+    FF_AUTO_CLOSE_DIR DIR* dirp = opendir(baseDir.chars);
+    if(dirp == NULL)
+        return 0.0/0.0;
+
+    struct dirent* entry;
+    while((entry = readdir(dirp)) != NULL)
+    {
+        if(entry->d_name[0] == '.')
+            continue;
+
+        ffStrbufAppendS(&baseDir, entry->d_name);
+        ffStrbufAppendC(&baseDir, '/');
+
+        double result = parseHwmonDir(&baseDir, &buffer);
+        if (result == result)
+            return result;
+
+        ffStrbufSubstrBefore(&baseDir, baseDirLength);
+    }
+
+    return 0.0/0.0;
+}
 
 #ifdef __ANDROID__
 #include "common/settings.h"
+
+static void detectQualcomm(FFCPUResult* cpu)
+{
+    // https://en.wikipedia.org/wiki/List_of_Qualcomm_Snapdragon_systems_on_chips
+
+    if (ffStrbufEqualS(&cpu->name, "SM8750"))
+        ffStrbufSetStatic(&cpu->name, "Qualcomm Snapdragon 8 Elite [SM8750]");
+    else if (ffStrbufEqualS(&cpu->name, "SM8635"))
+        ffStrbufSetStatic(&cpu->name, "Qualcomm Snapdragon 8s Gen 3 [SM8635]");
+    else if (ffStrbufEqualS(&cpu->name, "SM8650-AC"))
+        ffStrbufSetStatic(&cpu->name, "Qualcomm Snapdragon 8 Gen 3 for Galaxy [SM8650-AC]");
+    else if (ffStrbufEqualS(&cpu->name, "SM8650"))
+        ffStrbufSetStatic(&cpu->name, "Qualcomm Snapdragon 8 Gen 3 [SM8650]");
+    else if (ffStrbufEqualS(&cpu->name, "SM8550-AC"))
+        ffStrbufSetStatic(&cpu->name, "Qualcomm Snapdragon 8 Gen 2 for Galaxy [SM8550-AC]");
+    else if (ffStrbufEqualS(&cpu->name, "SM8550"))
+        ffStrbufSetStatic(&cpu->name, "Qualcomm Snapdragon 8 Gen 2 [SM8550]");
+    else if (ffStrbufEqualS(&cpu->name, "SM8475"))
+        ffStrbufSetStatic(&cpu->name, "Qualcomm Snapdragon 8+ Gen 1 [SM8475]");
+    else if (ffStrbufEqualS(&cpu->name, "SM8450"))
+        ffStrbufSetStatic(&cpu->name, "Qualcomm Snapdragon 8 Gen 1 [SM8450]");
+
+    else if (ffStrbufEqualS(&cpu->name, "SM7675"))
+        ffStrbufSetStatic(&cpu->name, "Qualcomm Snapdragon 7+ Gen 3 [SM7675]");
+    else if (ffStrbufEqualS(&cpu->name, "SM7635"))
+        ffStrbufSetStatic(&cpu->name, "Qualcomm Snapdragon 7s Gen 3 [SM7635]");
+    else if (ffStrbufEqualS(&cpu->name, "SM7550"))
+        ffStrbufSetStatic(&cpu->name, "Qualcomm Snapdragon 7 Gen 3 [SM7550]");
+    else if (ffStrbufEqualS(&cpu->name, "SM7475"))
+        ffStrbufSetStatic(&cpu->name, "Qualcomm Snapdragon 7+ Gen 2 [SM7550]");
+    else if (ffStrbufEqualS(&cpu->name, "SM7435"))
+        ffStrbufSetStatic(&cpu->name, "Qualcomm Snapdragon 7s Gen 2 [SM7435]");
+    else if (ffStrbufEqualS(&cpu->name, "SM7450"))
+        ffStrbufSetStatic(&cpu->name, "Qualcomm Snapdragon 7 Gen 1 [SM7450]");
+
+    else if (ffStrbufEqualS(&cpu->name, "SM6375-AC"))
+        ffStrbufSetStatic(&cpu->name, "Qualcomm Snapdragon 6s Gen 3 [SM6375-AC]");
+    else if (ffStrbufEqualS(&cpu->name, "SM6475"))
+        ffStrbufSetStatic(&cpu->name, "Qualcomm Snapdragon 6 Gen 3 [SM6475]");
+    else if (ffStrbufEqualS(&cpu->name, "SM6115"))
+        ffStrbufSetStatic(&cpu->name, "Qualcomm Snapdragon 6s Gen 1 [SM6115]");
+    else if (ffStrbufEqualS(&cpu->name, "SM6450"))
+        ffStrbufSetStatic(&cpu->name, "Qualcomm Snapdragon 6 Gen 1 [SM6450]");
+
+    else if (ffStrbufEqualS(&cpu->name, "SM4635"))
+        ffStrbufSetStatic(&cpu->name, "Qualcomm Snapdragon 4s Gen 2 [SM4635]");
+    else if (ffStrbufEqualS(&cpu->name, "SM4450"))
+        ffStrbufSetStatic(&cpu->name, "Qualcomm Snapdragon 4 Gen 2 [SM4450]");
+    else if (ffStrbufEqualS(&cpu->name, "SM4375"))
+        ffStrbufSetStatic(&cpu->name, "Qualcomm Snapdragon 4 Gen 1 [SM4375]");
+}
 
 static void detectAndroid(FFCPUResult* cpu)
 {
     if (cpu->name.length == 0)
     {
-        ffSettingsGetAndroidProperty("ro.soc.model", &cpu->name);
-        ffStrbufClear(&cpu->vendor); // We usually detect the vendor of CPU core as ARM, but instead we want the vendor of SOC
+        if (ffSettingsGetAndroidProperty("ro.soc.model", &cpu->name))
+            ffStrbufClear(&cpu->vendor); // We usually detect the vendor of CPU core as ARM, but instead we want the vendor of SOC
+        else if(ffSettingsGetAndroidProperty("ro.mediatek.platform", &cpu->name))
+            ffStrbufSetStatic(&cpu->vendor, "MTK");
     }
     if (cpu->vendor.length == 0)
     {
         if (!ffSettingsGetAndroidProperty("ro.soc.manufacturer", &cpu->vendor))
             ffSettingsGetAndroidProperty("ro.product.product.manufacturer", &cpu->vendor);
     }
+
+    if (ffStrbufEqualS(&cpu->vendor, "QTI") && ffStrbufStartsWithS(&cpu->name, "SM"))
+        detectQualcomm(cpu);
 }
 #endif
 
-static const char* parseCpuInfo(FFCPUResult* cpu, FFstrbuf* physicalCoresBuffer, FFstrbuf* cpuMHz, FFstrbuf* cpuIsa, FFstrbuf* cpuUarch)
-{
-    FF_AUTO_CLOSE_FILE FILE* cpuinfo = fopen("/proc/cpuinfo", "r");
-    if(cpuinfo == NULL)
-        return "fopen(\"/proc/cpuinfo\", \"r\") failed";
+#if __arm__ || __aarch64__
+#include "cpu_arm.h"
 
-    FF_AUTO_FREE char* line = NULL;
+static void detectArmName(FFstrbuf* cpuinfo, FFCPUResult* cpu, uint32_t implId)
+{
+    char* line = NULL;
+    size_t len = 0;
+    uint32_t lastPartId = UINT32_MAX;
+    uint32_t num = 0;
+    while(ffStrbufGetline(&line, &len, cpuinfo))
+    {
+        if (!ffStrStartsWith(line, "CPU part\t: ")) continue;
+        uint32_t partId = (uint32_t) strtoul(line + strlen("CPU part\t: "), NULL, 16);
+        const char* name = NULL;
+        switch (implId)
+        {
+            case 0x41: name = armPartId2name(partId); break;
+            case 0x42: name = brcmPartId2name(partId); break;
+            case 0x43: name = caviumPartId2name(partId); break;
+            case 0x44: name = decPartId2name(partId); break;
+            case 0x46: name = fujitsuPartId2name(partId); break;
+            case 0x48: name = hisiPartId2name(partId); break;
+            case 0x4e: name = nvidiaPartId2name(partId); break;
+            case 0x50: name = apmPartId2name(partId); break;
+            case 0x51: name = qcomPartId2name(partId); break;
+            case 0x53: name = samsungPartId2name(partId); break;
+            case 0x56: name = marvellPartId2name(partId); break;
+            case 0x61:
+                if (partId == 0)
+                {
+                    // https://github.com/Dr-Noob/cpufetch/issues/213#issuecomment-1927782105
+                    ffStrbufSetStatic(&cpu->name, "Virtualized Apple Silicon");
+                    return;
+                }
+                name = applePartId2name(partId);
+                break;
+            case 0x66: name = faradayPartId2name(partId); break;
+            case 0x69: name = intelPartId2name(partId); break;
+            case 0x6d: name = msPartId2name(partId); break;
+            case 0x70: name = ftPartId2name(partId); break;
+            case 0xc0: name = amperePartId2name(partId); break;
+        }
+        if (lastPartId != partId)
+        {
+            if (lastPartId != UINT32_MAX)
+            {
+                if (num > 1)
+                    ffStrbufAppendF(&cpu->name, "*%u", num);
+                ffStrbufAppendS(&cpu->name, " + ");
+            }
+            if (name)
+                ffStrbufAppendS(&cpu->name, name);
+            else if (partId)
+                ffStrbufAppendF(&cpu->name, "%s-%X", cpu->vendor.chars, partId);
+            else
+                ffStrbufAppend(&cpu->name, &cpu->vendor);
+            lastPartId = partId;
+            num = 1;
+        }
+        else
+            ++num;
+    }
+    if (num > 1)
+        ffStrbufAppendF(&cpu->name, "*%u", num);
+}
+#endif
+
+static const char* parseCpuInfo(
+    FFstrbuf* cpuinfo,
+    FFCPUResult* cpu,
+    FF_MAYBE_UNUSED FFstrbuf* physicalCoresBuffer,
+    FF_MAYBE_UNUSED FFstrbuf* cpuMHz,
+    FF_MAYBE_UNUSED FFstrbuf* cpuIsa,
+    FF_MAYBE_UNUSED FFstrbuf* cpuUarch,
+    FF_MAYBE_UNUSED FFstrbuf* cpuImplementer)
+{
+    char* line = NULL;
     size_t len = 0;
 
-    #ifdef __aarch64__
-    FF_STRBUF_AUTO_DESTROY implementer = ffStrbufCreate();
-    #endif
-
-    while(getline(&line, &len, cpuinfo) != -1)
+    while(ffStrbufGetline(&line, &len, cpuinfo))
     {
-        //Stop after the first CPU
-        if(*line == '\0' || *line == '\n')
+        //Stop after reasonable information is acquired
+        if((*line == '\0' || *line == '\n')
+            #if __arm__ || __loongarch__
+            && cpu->name.length > 0 // #1202 #1204
+            #endif
+        )
             break;
 
         (void)(
-            ffParsePropLine(line, "model name :", &cpu->name) ||
-            ffParsePropLine(line, "vendor_id :", &cpu->vendor) ||
-            ffParsePropLine(line, "cpu cores :", physicalCoresBuffer) ||
-            ffParsePropLine(line, "cpu MHz :", cpuMHz) ||
-            ffParsePropLine(line, "isa :", cpuIsa) ||
-            ffParsePropLine(line, "uarch :", cpuUarch) ||
-
-            #ifdef __aarch64__
-            (cpu->vendor.length == 0 && ffParsePropLine(line, "CPU implementer :", &implementer)) ||
+            // arm64 doesn't have "model name"; arm32 does have "model name" but its value is not useful.
+            // "Hardware" should always be used in this case
+            #if !(__arm__ || __aarch64__)
+            (cpu->name.length == 0 && ffParsePropLine(line, "model name :", &cpu->name)) ||
+            (cpu->vendor.length == 0 && ffParsePropLine(line, "vendor_id :", &cpu->vendor)) ||
+            (physicalCoresBuffer->length == 0 && ffParsePropLine(line, "cpu cores :", physicalCoresBuffer)) ||
+            (cpuMHz->length == 0 && ffParsePropLine(line, "cpu MHz :", cpuMHz)) ||
             #endif
 
+            #if !(__x86_64__ || __i386__ || __arm__ || __aarch64__)
+            (cpuIsa->length == 0 && ffParsePropLine(line, "isa :", cpuIsa)) ||
+            (cpuUarch->length == 0 && ffParsePropLine(line, "uarch :", cpuUarch)) ||
+            #endif
+
+            #if __arm__ || __aarch64__
+            (cpuImplementer->length == 0 && ffParsePropLine(line, "CPU implementer :", cpuImplementer)) ||
             (cpu->name.length == 0 && ffParsePropLine(line, "Hardware :", &cpu->name)) || //For Android devices
-            (cpu->name.length == 0 && ffParsePropLine(line, "cpu     :", &cpu->name)) || //For POWER
-            (cpu->name.length == 0 && ffParsePropLine(line, "cpu model               :", &cpu->name)) //For MIPS
+            #endif
+            #if __powerpc__ || __powerpc
+            (cpu->name.length == 0 && ffParsePropLine(line, "cpu :", &cpu->name)) || //For POWER
+            #endif
+            #if __mips__
+            (cpu->name.length == 0 && ffParsePropLine(line, "cpu model :", &cpu->name)) || //For MIPS
+            #endif
+            false
         );
     }
-
-    #ifdef __aarch64__
-    // https://github.com/util-linux/util-linux/blob/2cd89de14549d2b2c079a4f8b73f75500d229fee/sys-utils/lscpu-arm.c#L286
-    if (cpu->vendor.length == 0 && implementer.length > 2 /* 0xX */)
-    {
-        uint32_t implId = (uint32_t) strtoul(implementer.chars, NULL, 16);
-        switch (implId)
-        {
-        case 0x41: ffStrbufSetStatic(&cpu->vendor, "ARM"); break;
-        case 0x42: ffStrbufSetStatic(&cpu->vendor, "Broadcom"); break;
-        case 0x48: ffStrbufSetStatic(&cpu->vendor, "HiSilicon"); break;
-        case 0x4e: ffStrbufSetStatic(&cpu->vendor, "Nvidia"); break;
-        case 0x51: ffStrbufSetStatic(&cpu->vendor, "Qualcomm"); break;
-        case 0x53: ffStrbufSetStatic(&cpu->vendor, "Samsung"); break;
-        case 0x61: ffStrbufSetStatic(&cpu->vendor, "Apple"); break;
-        case 0x69: ffStrbufSetStatic(&cpu->vendor, "Intel"); break;
-        }
-    }
-    #endif
 
     return NULL;
 }
@@ -94,7 +284,7 @@ static uint32_t getFrequency(FFstrbuf* basePath, const char* cpuinfoFileName, co
     bool ok = ffReadFileBuffer(basePath->chars, buffer);
     ffStrbufSubstrBefore(basePath, baseLen);
     if (ok)
-        return (uint32_t) ffStrbufToUInt(buffer, 0);
+        return (uint32_t) (ffStrbufToUInt(buffer, 0) / 1000);
 
     if (scalingFileName)
     {
@@ -102,7 +292,7 @@ static uint32_t getFrequency(FFstrbuf* basePath, const char* cpuinfoFileName, co
         ok = ffReadFileBuffer(basePath->chars, buffer);
         ffStrbufSubstrBefore(basePath, baseLen);
         if (ok)
-            return (uint32_t) ffStrbufToUInt(buffer, 0);
+            return (uint32_t) (ffStrbufToUInt(buffer, 0) / 1000);
     }
 
     return 0;
@@ -141,38 +331,24 @@ static bool detectFrequency(FFCPUResult* cpu, const FFCPUOptions* options)
         if (ffStrStartsWith(entry->d_name, "policy") && ffCharIsDigit(entry->d_name[strlen("policy")]))
         {
             ffStrbufAppendS(&path, entry->d_name);
+
+            uint32_t fmax = getFrequency(&path, "/cpuinfo_max_freq", "/scaling_max_freq", &buffer);
+            if (fmax == 0) continue;
+
+            if (cpu->frequencyMax >= fmax)
+            {
+                if (!options->showPeCoreCount)
+                {
+                    ffStrbufSubstrBefore(&path, baseLen);
+                    continue;
+                }
+            }
+            else
+                cpu->frequencyMax = fmax;
+
             uint32_t fbase = getFrequency(&path, "/base_frequency", NULL, &buffer);
             if (fbase > 0)
-            {
-                if (cpu->frequencyBase == cpu->frequencyBase)
-                    cpu->frequencyBase = cpu->frequencyBase > fbase ? cpu->frequencyBase : fbase;
-                else
-                    cpu->frequencyBase = fbase;
-            }
-            uint32_t fbioslimit = getFrequency(&path, "/bios_limit", NULL, &buffer);
-            if (fbioslimit > 0)
-            {
-                if (cpu->frequencyBiosLimit == cpu->frequencyBiosLimit)
-                    cpu->frequencyBiosLimit = cpu->frequencyBiosLimit > fbioslimit ? cpu->frequencyBiosLimit : fbioslimit;
-                else
-                    cpu->frequencyBiosLimit = fbioslimit;
-            }
-            uint32_t fmax = getFrequency(&path, "/cpuinfo_max_freq", "/scaling_max_freq", &buffer);
-            if (fmax > 0)
-            {
-                if (cpu->frequencyMax == cpu->frequencyMax)
-                    cpu->frequencyMax = cpu->frequencyMax > fmax ? cpu->frequencyMax : fmax;
-                else
-                    cpu->frequencyMax = fmax;
-            }
-            uint32_t fmin = getFrequency(&path, "/cpuinfo_min_freq", "/scaling_min_freq", &buffer);
-            if (fmin > 0)
-            {
-                if (cpu->frequencyMin == cpu->frequencyMin)
-                    cpu->frequencyMin = cpu->frequencyMin < fmin ? cpu->frequencyMin : fmin;
-                else
-                    cpu->frequencyMin = fmin;
-            }
+                cpu->frequencyBase = cpu->frequencyBase > fbase ? cpu->frequencyBase : fbase;
 
             if (options->showPeCoreCount)
             {
@@ -187,31 +363,14 @@ static bool detectFrequency(FFCPUResult* cpu, const FFCPUOptions* options)
             ffStrbufSubstrBefore(&path, baseLen);
         }
     }
-    cpu->frequencyBase /= 1e6;
-    cpu->frequencyMax /= 1e6;
-    cpu->frequencyMin /= 1e6;
-    cpu->frequencyBiosLimit /= 1e6;
     return true;
 }
 
-static double detectCPUTemp(void)
+FF_MAYBE_UNUSED static void parseIsa(FFstrbuf* cpuIsa)
 {
-    const FFlist* tempsResult = ffDetectTemps();
+    // Always use the last part of the ISA string. Ref: #590 #1204
+    ffStrbufSubstrAfterLastC(cpuIsa, ' ');
 
-    FF_LIST_FOR_EACH(FFTempValue, value, *tempsResult)
-    {
-        if(
-            ffStrbufFirstIndexS(&value->name, "cpu") < value->name.length ||
-            ffStrbufCompS(&value->name, "k10temp") == 0 ||
-            ffStrbufCompS(&value->name, "coretemp") == 0
-        ) return value->value;
-    }
-
-    return FF_CPU_TEMP_UNSET;
-}
-
-static void parseIsa(FFstrbuf* cpuIsa)
-{
     if(ffStrbufStartsWithS(cpuIsa, "rv"))
     {
         // RISC-V ISA string example: "rv64imafdch_zicsr_zifencei".
@@ -227,54 +386,140 @@ static void parseIsa(FFstrbuf* cpuIsa)
         }
         // The final ISA output of the above example is "rv64gch".
     }
-    if(ffStrbufStartsWithS(cpuIsa, "mips"))
+}
+
+FF_MAYBE_UNUSED static void detectArmSoc(FFCPUResult* cpu)
+{
+    if (cpu->name.length > 0)
+        return;
+
+    // device-vendor,device-model\0soc-vendor,soc-model\0
+    char content[256];
+    ssize_t length = ffReadFileData("/proc/device-tree/compatible", ARRAY_SIZE(content), content);
+    if (length <= 2) return;
+
+    // get the second NUL terminated string if it exists
+    char* vendor = memchr(content, '\0', (size_t) length) + 1;
+    if (!vendor || vendor - content >= length) vendor = content;
+
+    char* model = strchr(vendor, ',');
+    if (!model) return;
+    *model = '\0';
+    ++model;
+
+    if (false) {}
+    #if __aarch64__
+    else if (ffStrEquals(vendor, "apple"))
     {
-        ffStrbufSubstrAfterLastC(cpuIsa, ' ');
+        // https://elixir.bootlin.com/linux/v6.11/source/arch/arm64/boot/dts/apple
+        if (model[0] == 't')
+        {
+            uint32_t deviceId = (uint32_t) strtoul(model + 1, NULL, 10);
+            ffStrbufSetStatic(&cpu->name, ffCPUAppleCodeToName(deviceId));
+
+            if (!cpu->name.length)
+            {
+                ffStrbufSetS(&cpu->name, "Apple Silicon ");
+                ffStrbufAppendS(&cpu->name, model);
+            }
+        }
+        else
+            ffStrbufSetS(&cpu->name, model);
+
+        ffStrbufSetStatic(&cpu->vendor, "Apple");
+    }
+    #endif
+    else if (ffStrEquals(vendor, "qcom"))
+    {
+        // https://elixir.bootlin.com/linux/v6.11/source/arch/arm64/boot/dts/qcom
+        if (ffStrStartsWith(model, "x"))
+        {
+            ffStrbufSetS(&cpu->name, "Qualcomm Snapdragon X Elite ");
+            for (const char* p = model + 1; *p; ++p)
+                ffStrbufAppendC(&cpu->name, (char) toupper(*p));
+        }
+        else if (ffStrStartsWith(model, "sc"))
+        {
+            const char* code = model + 2;
+            uint32_t deviceId = (uint32_t) strtoul(code, NULL, 10);
+            ffStrbufSetStatic(&cpu->name, ffCPUQualcommCodeToName(deviceId));
+            if (!cpu->name.length)
+            {
+                ffStrbufAppendS(&cpu->name, "Qualcomm Snapdragon SC");
+                ffStrbufAppendS(&cpu->name, code);
+            }
+        }
+        else
+            ffStrbufSetS(&cpu->name, model);
+
+        ffStrbufSetStatic(&cpu->vendor, "Qualcomm");
+    }
+    else if (ffStrEquals(vendor, "brcm"))
+    {
+        // Raspberry Pi
+        ffStrbufSetStatic(&cpu->vendor, "Broadcom");
+        for (const char* p = model; *p; ++p)
+            ffStrbufAppendC(&cpu->name, (char) toupper(*p));
+    }
+    else
+    {
+        ffStrbufSetS(&cpu->name, model);
+        ffStrbufSetS(&cpu->vendor, vendor);
+        cpu->vendor.chars[0] = (char) toupper(vendor[0]);
     }
 }
 
-void detectAsahi(FFCPUResult* cpu)
+FF_MAYBE_UNUSED static uint16_t getPackageCount(FFstrbuf* cpuinfo)
 {
-    // In Asahi Linux, reading /proc/device-tree/compatible gives
-    // information on the device model. It consists of 3 NUL terminated
-    // strings, the second of which gives the actual SoC model. But it
-    // is not the marketing name, i.e. for M2 there is "apple,t8112" in
-    // the compatible string.
-    if (cpu->name.length == 0 && ffStrbufEqualS(&cpu->vendor, "Apple"))
-    {
-        char content[32];
-        ssize_t length = ffReadFileData("/proc/device-tree/compatible", sizeof(content), content);
-        if (length <= 0) return;
+    const char* p = cpuinfo->chars;
+    uint64_t low = 0, high = 0;
 
-        // get the second NUL terminated string
-        char* modelName = memchr(content, '\0', (size_t) length) + 1;
-        if (modelName - content < length && ffStrStartsWith(modelName, "apple,t"))
-        {
-            uint32_t deviceId = (uint32_t) strtoul(modelName + strlen("apple,t"), NULL, 10);
-            ffStrbufSetStatic(&cpu->name, ffCPUAppleCodeToName(deviceId));
-        }
+    while ((p = memmem(p, cpuinfo->length - (uint32_t) (p - cpuinfo->chars), "\nphysical id\t:", strlen("\nphysical id\t:"))))
+    {
+        if (!p) break;
+        p += strlen("\nphysical id\t:");
+        char* pend;
+        unsigned long id = strtoul(p, &pend, 10);
+        if (__builtin_expect(id > 64, false)) // Do 129-socket boards exist?
+            high |= 1 << (id - 64);
+        else
+            low |= 1 << id;
+        p = pend;
     }
+
+    return (uint16_t) (__builtin_popcountll(low) + __builtin_popcountll(high));
 }
 
 const char* ffDetectCPUImpl(const FFCPUOptions* options, FFCPUResult* cpu)
 {
+    FF_STRBUF_AUTO_DESTROY cpuinfo = ffStrbufCreateA(PROC_FILE_BUFFSIZ);
+    if (!ffReadFileBuffer("/proc/cpuinfo", &cpuinfo) || cpuinfo.length == 0)
+        return "ffReadFileBuffer(\"/proc/cpuinfo\") failed";
+
     cpu->temperature = options->temp ? detectCPUTemp() : FF_CPU_TEMP_UNSET;
 
     FF_STRBUF_AUTO_DESTROY physicalCoresBuffer = ffStrbufCreate();
     FF_STRBUF_AUTO_DESTROY cpuMHz = ffStrbufCreate();
     FF_STRBUF_AUTO_DESTROY cpuIsa = ffStrbufCreate();
     FF_STRBUF_AUTO_DESTROY cpuUarch = ffStrbufCreate();
+    FF_STRBUF_AUTO_DESTROY cpuImplementerStr = ffStrbufCreate();
 
-    const char* error = parseCpuInfo(cpu, &physicalCoresBuffer, &cpuMHz, &cpuIsa, &cpuUarch);
+    const char* error = parseCpuInfo(&cpuinfo, cpu, &physicalCoresBuffer, &cpuMHz, &cpuIsa, &cpuUarch, &cpuImplementerStr);
     if (error) return error;
 
     cpu->coresLogical = (uint16_t) get_nprocs_conf();
     cpu->coresOnline = (uint16_t) get_nprocs();
     cpu->coresPhysical = (uint16_t) ffStrbufToUInt(&physicalCoresBuffer, cpu->coresLogical);
+    #if __x86_64__ || __i386__
+    cpu->packages = getPackageCount(&cpuinfo);
+    #endif
 
-    if (!detectFrequency(cpu, options) || cpu->frequencyBase != cpu->frequencyBase)
-        cpu->frequencyBase = ffStrbufToDouble(&cpuMHz) / 1000;
+    // Ref https://github.com/fastfetch-cli/fastfetch/issues/1194#issuecomment-2295058252
+    ffCPUDetectSpeedByCpuid(cpu);
+    if (!detectFrequency(cpu, options) || cpu->frequencyBase == 0)
+        cpu->frequencyBase = (uint32_t) ffStrbufToUInt(&cpuMHz, 0);
 
+    #if !(__x86_64__ || __i386__ || __arm__ || __aarch64__)
     if(cpuUarch.length > 0)
     {
         if(cpu->name.length > 0)
@@ -289,84 +534,21 @@ const char* ffDetectCPUImpl(const FFCPUOptions* options, FFCPUResult* cpu)
             ffStrbufAppendC(&cpu->name, ' ');
         ffStrbufAppend(&cpu->name, &cpuIsa);
     }
-
-    #ifdef __ANDROID__
-    detectAndroid(cpu);
     #endif
 
-    #if defined(__linux__) && defined(__aarch64__)
-    detectAsahi(cpu);
+    #if __arm__ || __aarch64__
+    uint32_t cpuImplementer = (uint32_t) strtoul(cpuImplementerStr.chars, NULL, 16);
+    ffStrbufSetStatic(&cpu->vendor, hwImplId2Vendor(cpuImplementer));
+
+    #if __ANDROID__
+    detectAndroid(cpu);
+    #else
+    detectArmSoc(cpu);
     #endif
 
     if (cpu->name.length == 0)
-    {
-        FF_STRBUF_AUTO_DESTROY buffer = ffStrbufCreate();
-        if (ffProcessAppendStdOut(&buffer, (char *const[]) { "lscpu", NULL }) == NULL)
-        {
-            char* pstart = buffer.chars;
-
-            if (cpu->vendor.length == 0)
-            {
-                pstart = strstr(pstart, "Vendor ID:");
-                if (pstart)
-                {
-                    pstart += strlen("Vendor ID:");
-                    while (isspace(*pstart)) ++pstart;
-                    if (*pstart)
-                    {
-                        char* pend = strchr(pstart, '\n');
-                        if (pend != NULL)
-                            ffStrbufAppendNS(&cpu->vendor, (uint32_t) (pend - pstart), pstart);
-                        else
-                        {
-                            ffStrbufAppendS(&cpu->vendor, pstart);
-                        }
-                        pstart = pend + 1;
-                        if (pstart >= buffer.chars + buffer.length)
-                            return NULL;
-                    }
-                }
-                else
-                {
-                    pstart = buffer.chars;
-                }
-            }
-
-            while ((pstart = strstr(pstart, "Model name:")))
-            {
-                pstart += strlen("Model name:");
-                while (isspace(*pstart)) ++pstart;
-                if (*pstart == '\0')
-                    break;
-
-                if (cpu->name.length > 0)
-                    ffStrbufAppendS(&cpu->name, " + ");
-
-                if (*pstart == '-')
-                {
-                    if (cpu->vendor.length > 0)
-                        ffStrbufAppend(&cpu->name, &cpu->vendor);
-                    else
-                        ffStrbufAppendS(&cpu->name, "Unknown");
-                    ++pstart;
-                    continue;
-                }
-
-                char* pend = strchr(pstart, '\n');
-                if (pend != NULL)
-                    ffStrbufAppendNS(&cpu->name, (uint32_t) (pend - pstart), pstart);
-                else
-                {
-                    ffStrbufAppendS(&cpu->name, pstart);
-                    break;
-                }
-
-                pstart = pend + 1;
-                if (pstart >= buffer.chars + buffer.length)
-                    return NULL;
-            }
-        }
-    }
+        detectArmName(&cpuinfo, cpu, cpuImplementer);
+    #endif
 
     return NULL;
 }
