@@ -51,38 +51,6 @@ static void buildOutputDefault(const FFOSResult* os, FFstrbuf* result)
         ffStrbufAppend(result, &os->variantID);
         ffStrbufAppendC(result, ')');
     }
-
-    //Append architecture if it is missing
-    if(!ffStrbufContainIgnCase(result, &instance.state.platform.sysinfo.architecture))
-    {
-        ffStrbufAppendC(result, ' ');
-        ffStrbufAppend(result, &instance.state.platform.sysinfo.architecture);
-    }
-}
-
-static void buildOutputNixOS(const FFOSResult* os, FFstrbuf* result)
-{
-    ffStrbufAppendS(result, "NixOS");
-
-    if(os->buildID.length > 0)
-    {
-        ffStrbufAppendC(result, ' ');
-        ffStrbufAppend(result, &os->buildID);
-    }
-
-    if(os->codename.length > 0)
-    {
-        ffStrbufAppendS(result, " (");
-        ffStrbufAppendC(result, (char) toupper(os->codename.chars[0]));
-        ffStrbufAppendS(result, os->codename.chars + 1);
-        ffStrbufAppendC(result, ')');
-    }
-
-    if(instance.state.platform.sysinfo.architecture.length > 0)
-    {
-        ffStrbufAppendC(result, ' ');
-        ffStrbufAppend(result, &instance.state.platform.sysinfo.architecture);
-    }
 }
 
 void ffPrintOS(FFOSOptions* options)
@@ -95,21 +63,41 @@ void ffPrintOS(FFOSOptions* options)
         return;
     }
 
+    FF_STRBUF_AUTO_DESTROY key = ffStrbufCreate();
+
+    if(options->moduleArgs.key.length == 0)
+        ffStrbufSetStatic(&key, FF_OS_MODULE_NAME);
+    else
+    {
+        FF_PARSE_FORMAT_STRING_CHECKED(&key, &options->moduleArgs.key, ((FFformatarg[]) {
+            FF_FORMAT_ARG(instance.state.platform.sysinfo.name, "sysname"),
+            FF_FORMAT_ARG(os->name, "name"),
+            FF_FORMAT_ARG(options->moduleArgs.keyIcon, "icon"),
+        }));
+    }
+
     if(options->moduleArgs.outputFormat.length == 0)
     {
         FF_STRBUF_AUTO_DESTROY result = ffStrbufCreate();
 
-        if(ffStrbufIgnCaseCompS(&os->id, "nixos") == 0)
-            buildOutputNixOS(os, &result);
+        if(os->prettyName.length > 0)
+            ffStrbufAppend(&result, &os->prettyName);
         else
             buildOutputDefault(os, &result);
 
-        ffPrintLogoAndKey(FF_OS_MODULE_NAME, 0, &options->moduleArgs, FF_PRINT_TYPE_DEFAULT);
+        //Append architecture if it is missing
+        if(!ffStrbufContainIgnCase(&result, &instance.state.platform.sysinfo.architecture))
+        {
+            ffStrbufAppendC(&result, ' ');
+            ffStrbufAppend(&result, &instance.state.platform.sysinfo.architecture);
+        }
+
+        ffPrintLogoAndKey(key.chars, 0, &options->moduleArgs, FF_PRINT_TYPE_NO_CUSTOM_KEY);
         ffStrbufPutTo(&result, stdout);
     }
     else
     {
-        FF_PRINT_FORMAT_CHECKED(FF_OS_MODULE_NAME, 0, &options->moduleArgs, FF_PRINT_TYPE_DEFAULT, ((FFformatarg[]){
+        FF_PRINT_FORMAT_CHECKED(key.chars, 0, &options->moduleArgs, FF_PRINT_TYPE_NO_CUSTOM_KEY, ((FFformatarg[]){
             FF_FORMAT_ARG(instance.state.platform.sysinfo.name, "sysname"),
             FF_FORMAT_ARG(os->name, "name"),
             FF_FORMAT_ARG(os->prettyName, "pretty-name"),
@@ -121,7 +109,8 @@ void ffPrintOS(FFOSOptions* options)
             FF_FORMAT_ARG(os->versionID, "version-id"),
             FF_FORMAT_ARG(os->codename, "codename"),
             FF_FORMAT_ARG(os->buildID, "build-id"),
-            FF_FORMAT_ARG(instance.state.platform.sysinfo.architecture, "arch")
+            FF_FORMAT_ARG(instance.state.platform.sysinfo.architecture, "arch"),
+            FF_FORMAT_ARG(instance.state.platform.sysinfo.release, "kernel-release"),
         }));
     }
 }
@@ -195,7 +184,7 @@ static FFModuleBaseInfo ffModuleInfo = {
     .formatArgs = FF_FORMAT_ARG_LIST(((FFModuleFormatArg[]) {
         {"Name of the kernel", "sysname"},
         {"Name of the OS", "name"},
-        {"Pretty name of the OS", "pretty-name"},
+        {"Pretty name of the OS, if available", "pretty-name"},
         {"ID of the OS", "id"},
         {"ID like of the OS", "id-like"},
         {"Variant of the OS", "variant"},

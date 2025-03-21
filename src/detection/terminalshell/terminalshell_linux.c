@@ -56,10 +56,8 @@ static pid_t getShellInfo(FFShellResult* result, pid_t pid)
                 ffStrbufEqualS(&result->processName, "fastfetch")           || //994
                 ffStrbufEqualS(&result->processName, "flashfetch")          ||
                 ffStrbufContainS(&result->processName, "debug")             ||
-                ffStrbufContainS(&result->processName, "not-found")         ||
-                #ifdef __ANDROID__
+                ffStrbufContainS(&result->processName, "command-not-")      ||
                 ffStrbufEqualS(&result->processName, "proot")              ||
-                #endif
                 ffStrbufEndsWithS(&result->processName, ".sh")
             )
             {
@@ -108,9 +106,7 @@ static pid_t getTerminalInfo(FFTerminalResult* result, pid_t pid)
             ffStrbufEqualS(&result->processName, "login")      ||
             ffStrbufEqualS(&result->processName, "clifm")      || // https://github.com/leo-arch/clifm/issues/289
             ffStrbufEqualS(&result->processName, "chezmoi")    || // #762
-            #ifdef __ANDROID__
             ffStrbufEqualS(&result->processName, "proot")      ||
-            #endif
             #ifdef __linux__
             ffStrbufStartsWithS(&result->processName, "flatpak-") || // #707
             #endif
@@ -174,7 +170,6 @@ static void getTerminalFromEnv(FFTerminalResult* result)
 
             #ifdef __APPLE__
             !ffStrbufEqualS(&result->processName, "launchd") &&
-            !ffStrbufEqualS(&result->processName, "stable") && //for WarpTerminal
             #else
             !ffStrbufEqualS(&result->processName, "systemd") &&
             !ffStrbufEqualS(&result->processName, "init") &&
@@ -313,11 +308,11 @@ static void setShellInfoDetails(FFShellResult* result)
 
 static void setTerminalInfoDetails(FFTerminalResult* result)
 {
-    if(ffStrbufStartsWithC(&result->processName, '.') && ffStrbufEndsWithS(&result->processName, "-wrapped"))
+    if(ffStrbufStartsWithC(&result->processName, '.') && ffStrbufContainS(&result->processName, "-wrap"))
     {
         // For NixOS. Ref: #510 and https://github.com/NixOS/nixpkgs/pull/249428
         // We use processName when detecting version and font, overriding it for simplification
-        ffStrbufSubstrBefore(&result->processName, result->processName.length - (uint32_t) strlen("-wrapped"));
+        ffStrbufSubstrBeforeLastC(&result->processName, '-');
         ffStrbufSubstrAfter(&result->processName, 0);
     }
 
@@ -355,13 +350,23 @@ static void setTerminalInfoDetails(FFTerminalResult* result)
         ffStrbufInitStatic(&result->prettyName, "iTerm");
     else if(ffStrbufEndsWithS(&result->exePath, "Terminal.app/Contents/MacOS/Terminal"))
     {
-        ffStrbufSetStatic(&result->processName, "Apple_Terminal"); // for terminal font detection
+        ffStrbufSetStatic(&result->processName, "Apple_Terminal"); // $TERM_PROGRAM, for terminal font detection
         ffStrbufInitStatic(&result->prettyName, "Apple Terminal");
     }
     else if(ffStrbufEqualS(&result->processName, "Apple_Terminal"))
         ffStrbufInitStatic(&result->prettyName, "Apple Terminal");
+    else if(ffStrbufEndsWithS(&result->exePath, "Warp.app/Contents/MacOS/stable"))
+    {
+        ffStrbufSetStatic(&result->processName, "WarpTerminal"); // $TERM_PROGRAM, for terminal font detection
+        ffStrbufInitStatic(&result->prettyName, "Warp");
+    }
     else if(ffStrbufEqualS(&result->processName, "WarpTerminal"))
         ffStrbufInitStatic(&result->prettyName, "Warp");
+
+    #elif defined(__HAIKU__)
+
+    else if(ffStrbufEqualS(&result->processName, "Terminal"))
+        ffStrbufInitStatic(&result->prettyName, "Haiku Terminal");
 
     #endif
 

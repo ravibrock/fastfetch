@@ -51,9 +51,9 @@ const char* detectByOpenGL(FFlist* gpus)
     {
         FFGPUResult* gpu = (FFGPUResult*) ffListAdd(gpus);
         gpu->type = FF_GPU_TYPE_UNKNOWN;
-        ffStrbufInit(&gpu->vendor);
+        ffStrbufInitMove(&gpu->vendor, &result.vendor);
         ffStrbufInitMove(&gpu->name, &result.renderer);
-        ffStrbufInitMove(&gpu->driver, &result.vendor);
+        ffStrbufInit(&gpu->driver);
         ffStrbufInitF(&gpu->platformApi, "OpenGL %s", result.version.chars);
         gpu->index = FF_GPU_INDEX_UNSET;
         gpu->temperature = FF_GPU_TEMP_UNSET;
@@ -113,11 +113,6 @@ const char* ffDetectGPU(const FFGPUOptions* options, FFlist* result)
             ffListInitMove(result, &opencl->gpus);
             return NULL;
         }
-    }
-    if (options->detectionMethod <= FF_GPU_DETECTION_METHOD_EGLEXT)
-    {
-        if (ffGPUDetectByEglext(result) == NULL)
-            return NULL;
     }
     if (options->detectionMethod <= FF_GPU_DETECTION_METHOD_OPENGL)
     {
